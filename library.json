@@ -15,7 +15,7 @@
   "homepage": "https://github.com/NitrofMtl/BACnet-Arduino",
   "issues": "https://github.com/NitrofMtl/BACnet-Arduino/issues",
   "keywords": [
-    "BACnet", "BACnet/IP", "building automation", "HVAC", "BMS", "industrial", "automation", "Arduino"
+    "BACnet", "BACnet-IP", "building automation", "HVAC", "BMS", "industrial", "automation", "Arduino"
   ],
   "category": "Communication",
   "license": "MIT",
@@ -27,12 +27,5 @@
       "version": "^5.2.0",
       "url": "https://github.com/NitrofMtl/WeeklyAlarm"
     }
-  ],
-
-  "build": {
-    "srcFilter": [
-      "+<*>",
-      "-<bacnet/basic/object/schedule.c>"
-    ]
-  }
+  ]
 }
