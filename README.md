@@ -6,7 +6,7 @@ BACnet-Arduino provides an Arduino-oriented interface to the BACnet stack, inclu
 
 The library keeps the BACnet protocol stack largely unchanged while providing an Arduino-specific port layer.
 
-> **Status:** 0.1.0 — initial release
+> **Status:** 0.2.0
 
 ---
 

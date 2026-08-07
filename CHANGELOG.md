@@ -1,6 +1,11 @@
 
 # Changelog
 
+## [0.2.0]
+
+### Changed
+- Exclude upstream Schedule implementation for Arduino compatibility
+
 ## [0.1.0] - Initial release
 
 First public release of BACnet-Arduino.
