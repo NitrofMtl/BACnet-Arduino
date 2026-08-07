@@ -1,0 +1,38 @@
+{
+  "name": "BACnet-Arduino",
+  "description": "Arduino BACnet library based on the open-source bacnet-stack project.",
+  "version": "0.1.0",
+  "authors": [
+    {
+      "name": "NitrofMtl",
+      "url": "https://github.com/NitrofMtl"
+    }
+  ],
+  "repository": {
+  "type": "git",
+  "url": "https://github.com/NitrofMtl/BACnet-Arduino.git"
+},
+  "homepage": "https://github.com/NitrofMtl/BACnet-Arduino",
+  "issues": "https://github.com/NitrofMtl/BACnet-Arduino/issues",
+  "keywords": [
+    "BACnet", "BACnet/IP", "building automation", "HVAC", "BMS", "industrial", "automation", "Arduino"
+  ],
+  "category": "Communication",
+  "license": "MIT",
+  "frameworks": "arduino",
+  "headers": "bacnetports/arduino/bacnet.h",
+  "dependencies": [
+    {
+      "name": "WeeklyAlarm",
+      "version": "^5.2.0",
+      "url": "https://github.com/NitrofMtl/WeeklyAlarm"
+    }
+  ],
+
+  "build": {
+    "srcFilter": [
+      "+<*>",
+      "-<bacnet/basic/object/schedule.c>"
+    ]
+  }
+}
