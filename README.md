@@ -6,7 +6,7 @@ BACnet-Arduino provides an Arduino-oriented interface to the BACnet stack, inclu
 
 The library keeps the BACnet protocol stack largely unchanged while providing an Arduino-specific port layer.
 
-> **Status:** 0.2.0
+> **Status:** 0.3.0
 
 ---
 
@@ -77,7 +77,7 @@ This keeps the BACnet core independent from the hardware.
 A BACnet/IP application normally needs the following initialization:
 
 ```cpp
-#include "ports/arduino/bacnet.h"
+#include "BACnet-Arduino.h"
 
 EthernetUDP Udp;
 

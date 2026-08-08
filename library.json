@@ -1,7 +1,7 @@
 {
   "name": "BACnet-Arduino",
   "description": "Arduino BACnet library based on the open-source bacnet-stack project.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "authors": [
     {
       "name": "NitrofMtl",
@@ -20,7 +20,7 @@
   "category": "Communication",
   "license": "MIT",
   "frameworks": "arduino",
-  "headers": "bacnetports/arduino/bacnet.h",
+  "headers": "BACnet-Arduino.h",
   "dependencies": [
     {
       "name": "WeeklyAlarm",

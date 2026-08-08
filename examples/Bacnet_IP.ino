@@ -12,7 +12,7 @@
 #include "kvstore_global_api.h"
 
 // BACnet-Arduino Arduino port
-#include "ports/arduino/bacnet.h"
+#include "BACnet-Arduino.h"
 
 // ----------------------------------------------------------------------------- 
 // Network configuration 

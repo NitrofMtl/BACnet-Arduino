@@ -1,6 +1,14 @@
 
 # Changelog
 
+
+## [0.2.0]
+
+### Changed
+- Add new header BACnet-Arduino.h
+
+---
+
 ## [0.2.0]
 
 ### Changed
