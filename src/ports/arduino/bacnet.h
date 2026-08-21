@@ -44,16 +44,6 @@
  */
 void bacnet_Poll();
 
-/**
- * @brief Get the local BACnet datalink address.
- *
- * Retrieves the BACnet address of the local device for the configured
- * datalink.
- *
- * @param my_address Pointer to a BACNET_ADDRESS structure that receives
- *                   the local address.
- */
-void datalink_get_my_address(BACNET_ADDRESS *my_address);
 
 #endif // PORTS_BACHET_H
 

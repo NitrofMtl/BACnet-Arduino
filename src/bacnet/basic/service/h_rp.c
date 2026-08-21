@@ -63,19 +63,19 @@ void handler_read_property(
     int apdu_len = -1;
     int npdu_len = -1;
     BACNET_NPDU_DATA npdu_data;
-    bool error = true; /* assume that there is an error */
+    bool error = true; // assume that there is an error
     int bytes_sent = 0;
     BACNET_ADDRESS my_address;
 
-    /* configure default error code as an abort since it is common */
+    // configure default error code as an abort since it is common 
     rpdata.error_code = ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
-    /* encode the NPDU portion of the packet */
+    // encode the NPDU portion of the packet
     datalink_get_my_address(&my_address);
     npdu_encode_npdu_data(&npdu_data, false, service_data->priority);
     npdu_len = npdu_encode_pdu(
         &Handler_Transmit_Buffer[0], src, &my_address, &npdu_data);
     if (npdu_len <= 0) {
-        /* If 0 or negative, there were problems with the data or encoding. */
+        // If 0 or negative, there were problems with the data or encoding. 
         len = BACNET_STATUS_ABORT;
         debug_print("RP: npdu_encode_pdu error.  Sending Abort!\n");
     } else if (service_len == 0) {
@@ -83,7 +83,7 @@ void handler_read_property(
         rpdata.error_code = ERROR_CODE_REJECT_MISSING_REQUIRED_PARAMETER;
         debug_print("RP: Missing Required Parameter. Sending Reject!\n");
     } else if (service_data->segmented_message) {
-        /* we don't support segmentation - send an abort */
+        // we don't support segmentation - send an abort 
         len = BACNET_STATUS_ABORT;
         debug_print("RP: Segmented message.  Sending Abort!\n");
     } else {
@@ -91,26 +91,26 @@ void handler_read_property(
         if (len <= 0) {
             debug_print("RP: Unable to decode Request!\n");
         } else {
-            /* When the object-type in the Object Identifier parameter
-               contains the value DEVICE and the instance in the 'Object
-               Identifier' parameter contains the value 4194303, the responding
-               BACnet-user shall treat the Object Identifier as if it correctly
-               matched the local Device object. This allows the device instance
-               of a device that does not generate I-Am messages to be
-               determined. */
+        //      When the object-type in the Object Identifier parameter
+        //      contains the value DEVICE and the instance in the 'Object
+        //      Identifier' parameter contains the value 4194303, the responding
+        //      BACnet-user shall treat the Object Identifier as if it correctly
+        //      matched the local Device object. This allows the device instance
+        //      of a device that does not generate I-Am messages to be
+        //      determined. 
             if ((rpdata.object_type == OBJECT_DEVICE) &&
                 (rpdata.object_instance == BACNET_MAX_INSTANCE)) {
                 rpdata.object_instance = Device_Object_Instance_Number();
             }
 #if (BACNET_PROTOCOL_REVISION >= 17)
-            /* When the object-type in the Object Identifier parameter
-               contains the value NETWORK_PORT and the instance in the 'Object
-               Identifier' parameter contains the value 4194303, the responding
-               BACnet-user shall treat the Object Identifier as if it correctly
-               matched the local Network Port object representing the network
-               port through which the request was received. This allows the
-               network port instance of the network port that was used to
-               receive the request to be determined. */
+            // When the object-type in the Object Identifier parameter
+            // contains the value NETWORK_PORT and the instance in the 'Object
+            //     Identifier' parameter contains the value 4194303, the responding
+            //     BACnet-user shall treat the Object Identifier as if it correctly
+            //     matched the local Network Port object representing the network
+            //     port through which the request was received. This allows the
+            // network port instance of the network port that was used to
+            //   receive the request to be determined.
             if ((rpdata.object_type == OBJECT_NETWORK_PORT) &&
                 (rpdata.object_instance == BACNET_MAX_INSTANCE)) {
                 rpdata.object_instance = Network_Port_Index_To_Instance(0);
@@ -119,7 +119,7 @@ void handler_read_property(
             apdu_len = rp_ack_encode_apdu_init(
                 &Handler_Transmit_Buffer[npdu_len], service_data->invoke_id,
                 &rpdata);
-            /* configure our storage */
+            // configure our storage
             rpdata.application_data =
                 &Handler_Transmit_Buffer[npdu_len + apdu_len];
             rpdata.application_data_len =
@@ -135,15 +135,16 @@ void handler_read_property(
                     &Handler_Transmit_Buffer[npdu_len + apdu_len]);
                 apdu_len += len;
                 if (apdu_len > service_data->max_resp) {
-                    /* too big for the sender - send an abort!
-                       Setting of error code needed here as read property
-                       processing may have overridden the default set at start
-                     */
+                    // too big for the sender - send an abort!
+                    // Setting of error code needed here as read property
+                    // processing may have overridden the default set at start
+                     
                     rpdata.error_code =
                         ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
                     len = BACNET_STATUS_ABORT;
                     debug_print("RP: Message too large.\n");
                 } else {
+                    //debug_print("RP: Sending Ack!\n");
                     error = false;
                 }
             } else {
@@ -160,6 +161,7 @@ void handler_read_property(
             }
         }
     }
+
     if (error) {
         if (len == BACNET_STATUS_ABORT) {
             apdu_len = abort_encode_apdu(
@@ -179,6 +181,7 @@ void handler_read_property(
             debug_print("RP: Sending Reject!\n");
         }
     }
+    
     pdu_len = npdu_len + apdu_len;
     bytes_sent = datalink_send_pdu(
         src, &npdu_data, &Handler_Transmit_Buffer[0], pdu_len);

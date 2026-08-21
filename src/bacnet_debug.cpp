@@ -5,4 +5,10 @@
 extern "C" void bacnet_debug(const char *msg)
 {
     Serial.println(msg);
+    
+}
+
+extern "C" void pinWrite(uint8_t pin, uint8_t value)
+{
+    digitalWrite(pin, value);
 }

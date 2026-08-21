@@ -2,7 +2,16 @@
 # Changelog
 
 
-## [0.2.0]
+## [0.4.0]
+
+### Changed
+- Add MS/TP support
+- Memory optimization optimizable via ports config file
+
+
+---
+
+## [0.3.0]
 
 ### Changed
 - Add new header BACnet-Arduino.h

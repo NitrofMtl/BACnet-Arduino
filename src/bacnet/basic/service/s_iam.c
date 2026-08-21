@@ -107,6 +107,7 @@ void Send_I_Am_Broadcast(uint8_t *buffer)
     /* send data */
     bytes_sent = datalink_send_pdu(&dest, &npdu_data, &buffer[0], pdu_len);
     if (bytes_sent <= 0) {
+        debug_printf("Failed to Send I-Am Reply");
         debug_perror("Failed to Send I-Am Reply");
     }
 }

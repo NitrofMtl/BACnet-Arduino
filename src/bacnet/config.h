@@ -18,6 +18,16 @@
 #include "bacnet-config.h"
 #endif
 
+/**
+ * @note Arduino port specific configuration is in "arduino_configs.h" and is included
+ * 
+ */
+#ifdef ARDUINO
+#include "ports/arduino/arduino_configs.h"
+#endif
+
+
+
 /* Note: these defines can be defined in your makefile or project
    or here or not defined and defaults will be used */
 

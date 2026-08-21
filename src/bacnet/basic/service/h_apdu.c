@@ -564,7 +564,7 @@ static bool apdu_unconfirmed_dcc_disabled(uint8_t service_choice)
  */
 void apdu_handler(
     BACNET_ADDRESS *src,
-    uint8_t *apdu, /* APDU data */
+    uint8_t *apdu, // APDU data
     uint16_t apdu_len)
 {
     BACNET_PDU_TYPE pdu_type;
@@ -572,7 +572,7 @@ void apdu_handler(
     uint8_t service_choice = 0;
     uint8_t *service_request = NULL;
     uint16_t service_request_len = 0;
-    int len = 0; /* counts where we are in PDU */
+    int len = 0; // counts where we are in PDU
 #if !BACNET_SVC_SERVER
     uint8_t invoke_id = 0;
     BACNET_CONFIRMED_SERVICE_ACK_DATA service_ack_data = { 0 };
@@ -587,6 +587,7 @@ void apdu_handler(
     if (apdu_len == 0) {
         return;
     }
+    
     pdu_type = apdu[0] & 0xF0;
     switch (pdu_type) {
         case PDU_TYPE_CONFIRMED_SERVICE_REQUEST:
@@ -594,40 +595,43 @@ void apdu_handler(
                 apdu, apdu_len, &service_data, &service_choice,
                 &service_request, &service_request_len);
             if (len == 0) {
-                /* service data unable to be decoded - simply drop */
+                // service data unable to be decoded - simply drop
                 break;
             }
             if (apdu_confirmed_dcc_disabled(service_choice)) {
-                /* When network communications are completely disabled,
-                    only DeviceCommunicationControl and ReinitializeDevice
-                    APDUs shall be processed and no messages shall be
-                    initiated. */
+                // When network communications are completely disabled,
+                // only DeviceCommunicationControl and ReinitializeDevice
+                // APDUs shall be processed and no messages shall be
+                // initiated.
                 break;
             }
             if ((service_choice < MAX_BACNET_CONFIRMED_SERVICE) &&
                 (Confirmed_Function[service_choice])) {
+
                 Confirmed_Function[service_choice](
-                    service_request, service_request_len, src, &service_data);
+                    service_request, service_request_len, src, &service_data);  
+                
             } else if (Unrecognized_Service_Handler) {
                 Unrecognized_Service_Handler(
                     service_request, service_request_len, src, &service_data);
             }
+
             break;
         case PDU_TYPE_UNCONFIRMED_SERVICE_REQUEST:
             if (apdu_len < 2) {
                 break;
             }
             service_choice = apdu[1];
-            /* prepare the service request buffer and length */
+            // prepare the service request buffer and length
             service_request_len = apdu_len - 2;
             service_request = &apdu[2];
             if (apdu_unconfirmed_dcc_disabled(service_choice)) {
-                /* When network communications are disabled,
-                    only DeviceCommunicationControl and
-                    ReinitializeDevice APDUs shall be processed and no
-                    messages shall be initiated. If communications have
-                    been initiation disabled, then WhoIs may be
-                    processed. */
+                // When network communications are disabled,
+                // only DeviceCommunicationControl and
+                // ReinitializeDevice APDUs shall be processed and no
+                // messages shall be initiated. If communications have
+                // been initiation disabled, then WhoIs may be
+                // processed.
                 break;
             }
             if (service_choice < MAX_BACNET_UNCONFIRMED_SERVICE) {
@@ -636,9 +640,11 @@ void apdu_handler(
                         service_request, service_request_len, src);
                 }
             }
+
             break;
 #if !BACNET_SVC_SERVER
         case PDU_TYPE_SIMPLE_ACK:
+        pinWrite(8, true);
             if (apdu_len < 3) {
                 break;
             }
@@ -652,6 +658,7 @@ void apdu_handler(
                 tsm_free_invoke_id(invoke_id);
             }
             break;
+
         case PDU_TYPE_COMPLEX_ACK:
             if (apdu_len < 3) {
                 break;
@@ -669,7 +676,7 @@ void apdu_handler(
                 service_ack_data.proposed_window_number = apdu[len++];
             }
             service_choice = apdu[len++];
-            /* prepare the service request buffer and length */
+            // prepare the service request buffer and length
             service_request_len = apdu_len - (uint16_t)len;
             service_request = &apdu[len];
             if (!apdu_confirmed_simple_ack_service(service_choice)) {
@@ -683,10 +690,11 @@ void apdu_handler(
                 }
                 tsm_free_invoke_id(invoke_id);
             }
+
             break;
         case PDU_TYPE_SEGMENT_ACK:
-            /* FIXME: what about a denial of service attack here?
-                we could check src to see if that matched the tsm */
+            // FIXME: what about a denial of service attack here?
+            // we could check src to see if that matched the tsm
             tsm_free_invoke_id(invoke_id);
             break;
         case PDU_TYPE_ERROR:
@@ -695,7 +703,7 @@ void apdu_handler(
             }
             invoke_id = apdu[1];
             service_choice = apdu[2];
-            /* prepare the service request buffer and length */
+            // prepare the service request buffer and length
             service_request_len = apdu_len - 3;
             service_request = &apdu[3];
             if (apdu_complex_error(service_choice)) {

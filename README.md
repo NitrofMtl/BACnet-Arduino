@@ -2,18 +2,20 @@
 
 Arduino BACnet library based on the open-source [bacnet-stack](https://github.com/bacnet-stack/bacnet-stack) project.
 
-BACnet-Arduino provides an Arduino-oriented interface to the BACnet stack, including BACnet/IP networking, BACnet object creation and access, time integration, device reinitialization, and BACnet Schedule support.
+BACnet-Arduino provides an Arduino-oriented interface to the BACnet stack, including BACnet/IP and BACnet MS/TP communication, BACnet object creation and access, time integration, device reinitialization, and BACnet Schedule support.
 
 The library keeps the BACnet protocol stack largely unchanged while providing an Arduino-specific port layer.
 
-> **Status:** 0.3.0
+> **Status:** 0.4.0
 
 ---
 
 ## Features
 
 * BACnet/IP support
+* BACnet MS/TP support
 * Arduino UDP transport integration
+* Arduino RS-485 / MS/TP transport integration
 * BACnet device configuration
 * BACnet object creation and Present Value access
 * BACnet time synchronization
@@ -26,17 +28,24 @@ The library keeps the BACnet protocol stack largely unchanged while providing an
 
 ---
 
-## ⚠️Resource Usage
+## Resource Usage
 
-BACnet-Arduino is based on the full `bacnet-stack` protocol implementation and therefore has a **significant memory footprint compared with typical Arduino libraries**.
+BACnet-Arduino is based on the full `bacnet-stack` protocol implementation, but unused BACnet features can be disabled to reduce the final application size.
 
 The actual RAM and flash usage depends on the selected BACnet features, objects, configuration, Arduino core, and application.
 
-As a reference, the initial BACnet-Arduino configuration uses a substantial portion of the available RAM on an Arduino Opta. Applications should therefore verify memory usage on their target board before deployment.
+As a reference, the current BACnet-Arduino configuration on an Arduino Opta uses approximately:
 
-This library is primarily intended for **32-bit Arduino boards with sufficient RAM and flash**, rather than small 8-bit Arduino boards.
+```text
+RAM:   19.5% (102144 bytes / 523624 bytes)
+Flash: 36.8% (289304 bytes / 786432 bytes)
+```
 
-> **Note:** The memory footprint is not a fixed library requirement. Disabling unused BACnet features and reducing object/configuration usage can significantly reduce the final application size.
+The memory footprint can vary significantly depending on the application and the BACnet features and objects enabled.
+
+BACnet-Arduino is primarily intended for **32-bit Arduino boards with sufficient RAM and flash** rather than small 8-bit Arduino boards.
+
+Applications should still verify memory usage on their target board before deployment.
 
 ---
 
@@ -53,8 +62,11 @@ Application / Arduino Sketch
           v
      bacnet-stack
           |
-          v
-     UDP / network
+          +------------------+
+          |                  |
+          v                  v
+       UDP/IP              RS-485
+      BACnet/IP           BACnet MS/TP
 ```
 
 The Arduino port provides the connection between the BACnet stack and the board-specific Arduino APIs.
@@ -62,6 +74,7 @@ The Arduino port provides the connection between the BACnet stack and the board-
 Board-specific functionality such as:
 
 * networking
+* RS-485 hardware
 * system time
 * hardware reset
 * persistent storage
@@ -74,36 +87,18 @@ This keeps the BACnet core independent from the hardware.
 
 # Getting Started
 
-A BACnet/IP application normally needs the following initialization:
+BACnet-Arduino supports two BACnet datalinks:
 
-```cpp
-#include "BACnet-Arduino.h"
+* **BACnet/IP** over UDP
+* **BACnet MS/TP** over RS-485
 
-EthernetUDP Udp;
+The configuration and initialization are different for each datalink.
 
-void setup()
-{
-    Ethernet.begin(deviceIp);
+For BACnet/IP, see [BACnet/IP Setup](docs/BIP.md).
 
-    Udp.begin(47808);
-    bacnet_set_udp(&Udp, 47808);
+For BACnet MS/TP, see [BACnet MS/TP Setup](docs/MSTP.md).
 
-    bacnet_init(&deviceInfos);
-
-    bacnet_time_callback_set(bacnet_get_time);
-}
-```
-
-The BACnet processing function must then be called continuously:
-
-```cpp
-void loop()
-{
-    bacnet_Poll();
-}
-```
-
-Do not use long blocking delays in the main loop. BACnet processing and timers depend on `loop()` being called regularly.
+The sections below describe functionality common to both BACnet/IP and BACnet MS/TP applications.
 
 ---
 
@@ -144,33 +139,6 @@ bacnet_init(&deviceInfos);
 
 ---
 
-# BACnet/IP Setup
-
-The Arduino port uses an `EthernetUDP` object for BACnet/IP.
-
-```cpp
-EthernetUDP Udp;
-
-Ethernet.begin(deviceIp);
-
-Udp.begin(47808);
-bacnet_set_udp(&Udp, 47808);
-```
-
-`bacnet_set_udp()` gives the BACnet port access to the UDP transport.
-
-The default BACnet/IP port is:
-
-```cpp
-47808
-```
-
-which corresponds to hexadecimal `0xBAC0`.
-
-The UDP object must remain valid for as long as BACnet/IP is running.
-
----
-
 # Callbacks
 
 Callbacks are an important part of BACnet-Arduino.
@@ -179,7 +147,7 @@ They allow the library to use board-specific functionality without making the BA
 
 There are several callbacks, but **not all of them are required**.
 
-## Callback summary
+## Callback Summary
 
 | Callback                               | Required?     | Purpose                                   |
 | -------------------------------------- | ------------- | ----------------------------------------- |
@@ -231,14 +199,11 @@ bool bacnet_get_time(
     bool *dst_active)
 {
     time_t epoch = time(nullptr);
-
     tmElements_t tm_info = {};
     breakTime(epoch, tm_info);
 
     *bdate = BACnetSchedule::toBACnetDate(tm_info);
     *btime = BACnetSchedule::toBACnetTime(tm_info);
-
-    *utc_offset_minutes = -4;
     *dst_active = false;
 
     return true;
@@ -295,7 +260,6 @@ void bacnet_sync_time(
         BACnetSchedule::toTimeElements(*bdate, *btime);
 
     time_t epoch_time = makeTime(tm_info);
-
     set_time(epoch_time);
 }
 ```
@@ -381,7 +345,6 @@ A typical loop therefore looks like:
 void loop()
 {
     static uint32_t last_ms = 0;
-
     uint32_t now = millis();
 
     Device_Timer(now - last_ms);
@@ -391,7 +354,6 @@ void loop()
 
     if (millis() - lastTimer >= 1000) {
         lastTimer += 1000;
-
         dcc_timer_seconds(1);
     }
 
@@ -431,7 +393,12 @@ Objects should normally be created during initialization.
 Create an Analog Value:
 
 ```cpp
-createAnalogValue(0, "Temperature", "Temperature in Celsius", UNITS_DEGREES_CELSIUS, 42.0f);
+createAnalogValue(
+    0,
+    "Temperature",
+    "Temperature in Celsius",
+    UNITS_DEGREES_CELSIUS,
+    42.0f);
 ```
 
 Read its Present Value:
@@ -443,7 +410,10 @@ float value = Analog_Value_Present_Value(0);
 Change its Present Value:
 
 ```cpp
-Analog_Value_Present_Value_Set(0, 25.5f, BACNET_PRIORITY_NORMAL);
+Analog_Value_Present_Value_Set(
+    0,
+    25.5f,
+    BACNET_PRIORITY_NORMAL);
 ```
 
 The priority argument allows the application to write the value through the BACnet priority mechanism.
@@ -455,7 +425,11 @@ The priority argument allows the application to write the value through the BACn
 Create an Analog Input:
 
 ```cpp
-createAnalogInput(0, "AI_0", "Analog Input 0", UNITS_MILLIAMPERES);
+createAnalogInput(
+    0,
+    "AI_0",
+    "Analog Input 0",
+    UNITS_MILLIAMPERES);
 ```
 
 Update its Present Value:
@@ -473,7 +447,12 @@ An Analog Input is normally updated by the application from a physical input or 
 Create an Analog Output:
 
 ```cpp
-createAnalogOutput(0, "AO_0", "Analog Output 0", UNITS_PERCENT, 50.0f);
+createAnalogOutput(
+    0,
+    "AO_0",
+    "Analog Output 0",
+    UNITS_PERCENT,
+    50.0f);
 ```
 
 The Present Value can then be accessed through the corresponding object API.
@@ -487,7 +466,11 @@ Outputs are normally used as the BACnet-controlled side of the application.
 Create a Binary Value:
 
 ```cpp
-createBinaryValue(0, "BV_0", "Binary Value 0", BINARY_INACTIVE);
+createBinaryValue(
+    0,
+    "BV_0",
+    "Binary Value 0",
+    BINARY_INACTIVE);
 ```
 
 Binary Values are application-controlled BACnet values and are useful for internal states, commands, or configuration.
@@ -499,15 +482,21 @@ Binary Values are application-controlled BACnet values and are useful for intern
 Create a Binary Input:
 
 ```cpp
-createBinaryInput(0, "BI_0", "Binary Input 0", BINARY_ACTIVE);
+createBinaryInput(
+    0,
+    "BI_0",
+    "Binary Input 0",
+    BINARY_ACTIVE);
 ```
 
 Update it from hardware:
 
 ```cpp
-Binary_Input_Present_Value_Set(0,
-    digitalRead(BTN_USER) == LOW ? BINARY_ACTIVE : BINARY_INACTIVE
-);
+Binary_Input_Present_Value_Set(
+    0,
+    digitalRead(BTN_USER) == LOW ?
+        BINARY_ACTIVE :
+        BINARY_INACTIVE);
 ```
 
 ---
@@ -517,7 +506,11 @@ Binary_Input_Present_Value_Set(0,
 Create a Binary Output:
 
 ```cpp
-createBinaryOutput(0, "BO_0", "Binary Output 0", BINARY_ACTIVE);
+createBinaryOutput(
+    0,
+    "BO_0",
+    "Binary Output 0",
+    BINARY_ACTIVE);
 ```
 
 A Binary Output is normally used when the BACnet device controls a physical output.
@@ -533,13 +526,20 @@ Multi-state objects use a list of state strings.
 For example:
 
 ```cpp
-static const char fanModeList[] = {"OFF\0" "ON\0" "AUTO\0"};
+static const char fanModeList[] = {
+    "OFF\0" "ON\0" "AUTO\0"
+};
 ```
 
 Create a Multi-State Output:
 
 ```cpp
-createMultiStateOutput(0, "FAN_MODE", "Fan Mode", fanModeList, 1);
+createMultiStateOutput(
+    0,
+    "FAN_MODE",
+    "Fan Mode",
+    fanModeList,
+    1);
 ```
 
 The state numbers are one-based:
@@ -553,7 +553,10 @@ The state numbers are one-based:
 Set the Present Value:
 
 ```cpp
-Multistate_Output_Present_Value_Set(0, 2, BACNET_PRIORITY_NORMAL);
+Multistate_Output_Present_Value_Set(
+    0,
+    2,
+    BACNET_PRIORITY_NORMAL);
 ```
 
 This is useful when the BACnet value represents an application state such as:
@@ -639,9 +642,8 @@ Configure its effective period:
 
 ```cpp
 mainSchedule.setEffectivePeriod(
-    2024, 1, 1, 
-    2099, 12, 31
-);
+    2024, 1, 1,
+    2099, 12, 31);
 ```
 
 Set the default value:
@@ -653,13 +655,20 @@ mainSchedule.setDefaultEnum(1);
 Configure the object controlled by the schedule:
 
 ```cpp
-mainSchedule.set_Object_Property_Reference(OBJECT_MULTI_STATE_OUTPUT, 0);
+mainSchedule.set_Object_Property_Reference(
+    OBJECT_MULTI_STATE_OUTPUT,
+    0);
 ```
 
 Add weekly events:
 
 ```cpp
-mainSchedule.setSchedule(dowFriday, 0, 21, 37, 2);
+mainSchedule.setSchedule(
+    dowFriday,
+    0,
+    21,
+    37,
+    2);
 ```
 
 The schedule automatically recalculates its Present Value and applies changes to the referenced BACnet object.
@@ -693,7 +702,7 @@ BACnetSchedule::begin();
 
 This order is important.
 
-## Restore callback
+## Restore Callback
 
 The restore callback is used to provide previously saved schedule data to the Schedule API.
 
@@ -714,7 +723,7 @@ Return:
 true
 ```
 
-When persistent data was available and successfully copied into data.
+when persistent data was available and successfully copied into `data`.
 
 Return:
 
@@ -730,7 +739,7 @@ For example, the Opta example uses `KVStore`.
 
 ---
 
-## Save callback
+## Save Callback
 
 The save callback receives:
 
@@ -768,106 +777,6 @@ If the schedule does not need persistence, the callbacks can be omitted.
 
 ---
 
-# Complete Initialization Example
-
-A typical BACnet/IP application therefore looks like:
-
-```cpp
-void setup()
-{
-    Serial.begin(9600);
-
-    setupNetwork();
-
-    bacnet_init(&deviceInfos);
-
-    // Required: BACnet must be able to read the board clock.
-    bacnet_time_callback_set(bacnet_get_time);
-
-    // Optional: allow BACnet Time Synchronization.
-    handler_timesync_set_callback_set(bacnet_sync_time);
-
-    // Optional: allow BACnet device reinitialization.
-    bacnet_reinitialize_callback_set(
-        BACNET_REINIT_COLDSTART,
-        reinitColdStartCb);
-
-    // Create application objects.
-    setupBacnetObjects();
-
-    // Optional: Schedule persistence.
-    BACnetSchedule::setRestoreCallback(restoreSchedule);
-    BACnetSchedule::setSaveCallback(saveSchedule);
-
-    BACnetSchedule::begin();
-}
-```
-
-And:
-
-```cpp
-void loop()
-{
-    // Maintain BACnet timers.
-    ...
-
-    // Process BACnet traffic.
-    bacnet_Poll();
-
-    // Application I/O.
-    ...
-}
-```
-
----
-
-# What the Application Must Provide
-
-At minimum, a BACnet/IP Arduino application needs to provide:
-
-### 1. UDP transport
-
-```cpp
-bacnet_set_udp(&Udp, 47808);
-```
-
-### 2. Device information
-
-```cpp
-bacnet_init(&deviceInfos);
-```
-
-### 3. A valid board clock callback
-
-```cpp
-bacnet_time_callback_set(bacnet_get_time);
-```
-
-### 4. Regular BACnet processing
-
-```cpp
-bacnet_Poll();
-```
-
-### 5. Regular BACnet timer processing
-
-```cpp
-Device_Timer(elapsed);
-```
-
-The following are feature-dependent:
-
-| Feature                     | Required application code                      |
-| --------------------------- | ---------------------------------------------- |
-| BACnet Time Synchronization | `handler_timesync_set_callback_set()`          |
-| Device Reinitialize         | `bacnet_reinitialize_callback_set()`           |
-| DCC                         | `dcc_timer_seconds()`                          |
-| Schedule persistence        | `setRestoreCallback()` + `setSaveCallback()`   |
-| BACnet objects              | Appropriate `create*()` and Present Value APIs |
-| Physical I/O                | Application-specific hardware code             |
-
----
-
 # Upstream BACnet Stack
 
 BACnet-Arduino is based on the open-source `bacnet-stack` project.
@@ -888,12 +797,14 @@ The project includes code derived from `bacnet-stack`; the original upstream lic
 
 ---
 
-# Example
+# Examples
 
-A complete working Arduino example is provided with the library and demonstrates:
+Complete working Arduino examples are provided with the library.
 
-* Ethernet initialization
-* BACnet/IP setup
+The examples demonstrate functionality including:
+
+* BACnet/IP
+* BACnet MS/TP
 * device configuration
 * BACnet object creation
 * time callbacks
@@ -903,3 +814,7 @@ A complete working Arduino example is provided with the library and demonstrates
 * object Present Value updates
 * Schedule configuration
 * Schedule persistence using the Opta `KVStore`
+
+For BACnet/IP configuration, see [docs/BIP.md](docs/BIP.md).
+
+For BACnet MS/TP configuration, see [docs/MSTP.md](docs/MSTP.md).
