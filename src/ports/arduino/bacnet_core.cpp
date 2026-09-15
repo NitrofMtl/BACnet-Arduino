@@ -47,15 +47,31 @@ static BACNET_CHARACTER_STRING Device_Name;
 
 void Device_Infos_Set(const deviceInfos_t *infos)
 {
-  Device_Set_Object_Instance_Number(infos->instance_number);
-  characterstring_init_ansi(&Device_Name, infos->name);
-  Device_Set_Object_Name(&Device_Name);
-  Device_Set_Vendor_Name(infos->vendor_name, strlen(infos->vendor_name));
-  Device_Set_Model_Name(infos->model_name, strlen(infos->model_name));
-  Device_Set_Firmware_Revision(infos->firmware_revision, strlen(infos->firmware_revision));
-  Device_Set_Application_Software_Version(infos->application_software_version, strlen(infos->application_software_version));
-  Device_Set_Description(infos->description, strlen(infos->description));
-  Device_Set_Location(infos->location, strlen(infos->location));
+    if (infos->instance_number) {
+        Device_Set_Object_Instance_Number(infos->instance_number);
+    }
+    if (infos->name) {
+        characterstring_init_ansi(&Device_Name, infos->name);
+        Device_Set_Object_Name(&Device_Name);
+    }
+    if (infos->vendor_name) {
+        Device_Set_Vendor_Name(infos->vendor_name, strlen(infos->vendor_name));
+    }
+    if (infos->model_name) {
+        Device_Set_Model_Name(infos->model_name, strlen(infos->model_name));
+    }
+    if (infos->firmware_revision) {
+        Device_Set_Firmware_Revision(infos->firmware_revision, strlen(infos->firmware_revision));
+    }
+    if (infos->application_software_version) {
+        Device_Set_Application_Software_Version(infos->application_software_version, strlen(infos->application_software_version));
+    }
+    if (infos->description) {
+        Device_Set_Description(infos->description, strlen(infos->description));
+    }
+    if (infos->location) {
+        Device_Set_Location(infos->location, strlen(infos->location));
+    }
 }
 
 

@@ -9,8 +9,8 @@
  * headers may be included to enable other BACnet datalinks, such as MS/TP.
  */
 
-#ifndef PORTS_BACHET_H
-#define PORTS_BACHET_H
+#ifndef PORTS_BACNET_H
+#define PORTS_BACNET_H
 
 #include <Arduino.h>
 
@@ -18,7 +18,6 @@
 #include <Ethernet.h>
 #include <EthernetUdp.h>
 #include <NTPClient.h>
-#include <mbed_mktime.h>
 
 //ports lib
 #include "ports/arduino/bacnet_udp_port.h"
@@ -45,6 +44,6 @@
 void bacnet_Poll();
 
 
-#endif // PORTS_BACHET_H
+#endif // PORTS_BACNET_H
 
 

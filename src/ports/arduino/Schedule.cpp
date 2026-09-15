@@ -26,7 +26,9 @@ BACnetSchedule::BACnetSchedule(uint8_t inst) : alarm(), instance(inst)
     }
     BS_Instances[instance] = this;
     set_Schedule_Write_Callback(BACnetSchedule::schedulePropertyWriteCallback);
-    alarm.add(ScheduleCallback{this});
+    ScheduleCallback sc;
+    sc.schedule = this;
+    alarm.add(sc);
 }
 
 

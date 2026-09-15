@@ -27,10 +27,6 @@
 #include <stdio.h> /* for standard i/o, like printing */
 #endif
 
-#ifndef BACNET_IP_PORT
-#define BACNET_IP_PORT 0xBAC0
-#endif
-
 
 UDP* bacnetUdp; 
 
@@ -46,8 +42,9 @@ void bip_get_my_address(BACNET_ADDRESS *my_address)
     my_address->mac[2] = ip[2];
     my_address->mac[3] = ip[3];
 
-    my_address->mac[4] = (BACNET_IP_PORT >> 8) & 0xFF;
-    my_address->mac[5] = BACNET_IP_PORT & 0xFF;
+    uint16_t port = bacnet_get_udp_port();
+    my_address->mac[4] = port >> 8 & 0xFF;
+    my_address->mac[5] = port & 0xFF;
 
     my_address->net = 0;
     my_address->len = 0;
@@ -63,8 +60,9 @@ void bip_get_broadcast_address(BACNET_ADDRESS *dest)
     dest->mac[2] = 255;
     dest->mac[3] = 255;
 
-    dest->mac[4] = (BACNET_IP_PORT >> 8) & 0xFF;
-    dest->mac[5] = BACNET_IP_PORT & 0xFF;
+    uint16_t port = bacnet_get_udp_port();
+    dest->mac[4] = port >> 8 & 0xFF;
+    dest->mac[5] = port & 0xFF;
 
     dest->net = BACNET_BROADCAST_NETWORK;
     dest->len = 0;
@@ -183,7 +181,7 @@ uint16_t bip_receive(
 
 //Extract sender
     IPAddress remoteIp = g_bacnet_udp->remoteIP();
-    uint16_t remotePort = g_bacnet_udp->remotePort();
+    uint16_t remotePort = bacnet_get_udp_port();
 
     src->mac_len = 6;
 
@@ -195,6 +193,7 @@ uint16_t bip_receive(
     src->mac[4] = remotePort >> 8;
     src->mac[5] = remotePort & 0xFF;
 
+    
     uint16_t npdu_len = len - 4;
 
     if(npdu_len > max_pdu)

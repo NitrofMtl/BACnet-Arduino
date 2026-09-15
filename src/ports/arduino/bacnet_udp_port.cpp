@@ -19,7 +19,7 @@ inline UDP *bacnet_get_udp()
 }
 
 
-inline uint16_t bacnet_get_udp_port()
+uint16_t bacnet_get_udp_port()
 {
     return bacnetUdpPort;
 }

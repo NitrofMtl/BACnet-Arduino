@@ -1,8 +1,7 @@
-#ifndef PORTS_BACHET_H
-#define PORTS_BACHET_H
+#ifndef PORTS_BACNET_MSTP_H
+#define PORTS_BACNET_MSTP_H
 
 #include <Arduino.h>
-//#include <Ethernet.h>
 
 #include "bacnet/bacdef.h"
 
@@ -32,6 +31,6 @@ void mstp_silence_reset();
 
 
 
-#endif // PORTS_BACHET_H
+#endif // PORTS_BACNET_MSTP_H
 
 

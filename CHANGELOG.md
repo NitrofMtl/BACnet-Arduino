@@ -1,6 +1,22 @@
 
 # Changelog
 
+## [0.5.0] uncommited
+
+### Add
+- Datalink BACnetRouter
+
+
+### Changed
+- Remove mbed_mktime.h inclusion from bacnet.h
+- Add macro for Schedule size into arduino-configs
+- disable default datalink.c to add a custom one for routing
+
+### Fixed
+- remove brace initializaqtion of ScheduleCallback for better compatibility
+- Guard devices infos setter
+- bip receive port indexing
+- Example apdu handler ordering  <<<--- TO DO
 
 ## [0.4.0]
 
