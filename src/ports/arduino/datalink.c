@@ -50,7 +50,10 @@ static enum {
     DATALINK_ZIGBEE,
     DATALINK_BSC,
     DATALINK_CUSTOM
-} Datalink_Transport;
+} Datalink_Transport, 
+#if defined(ROUTER_DEVICE)
+custom_transport;
+#endif
 
 void datalink_set(char *datalink_string)
 {
@@ -95,6 +98,52 @@ void datalink_set(char *datalink_string)
 #if defined(BACDL_CUSTOM)
     else if (bacnet_stricmp("custom", datalink_string) == 0) {
         Datalink_Transport = DATALINK_CUSTOM;
+    }
+#endif
+}
+
+void datalink_custom_set(char *datalink_string)
+{
+    if (bacnet_stricmp("none", datalink_string) == 0) {
+        custom_transport = DATALINK_NONE;
+    }
+#if defined(BACDL_BIP)
+    else if (bacnet_stricmp("bip", datalink_string) == 0) {
+        custom_transport = DATALINK_BIP;
+    }
+#endif
+#if defined(BACDL_BIP6)
+    else if (bacnet_stricmp("bip6", datalink_string) == 0) {
+        custom_transport
+#endif
+#if defined(BACDL_ETHERNET)
+    else if (bacnet_stricmp("ethernet", datalink_string) == 0) {
+        custom_transport = DATALINK_ETHERNET;
+    }
+#endif
+#if defined(BACDL_ARCNET)
+    else if (bacnet_stricmp("arcnet", datalink_string) == 0) {
+        custom_transport = DATALINK_ARCNET;
+    }
+#endif
+#if defined(BACDL_MSTP)
+    else if (bacnet_stricmp("mstp", datalink_string) == 0) {
+        custom_transport = DATALINK_MSTP;
+    }
+#endif
+#if defined(BACDL_ZIGBEE)
+    else if (bacnet_stricmp("zigbee", datalink_string) == 0) {
+        custom_transport = DATALINK_ARCNET;
+    }
+#endif
+#if defined(BACDL_BSC)
+    else if (bacnet_stricmp("bsc", datalink_string) == 0) {
+        custom_transport = DATALINK_BSC;
+    }
+#endif
+#if defined(BACDL_CUSTOM)
+    else if (bacnet_stricmp("custom", datalink_string) == 0) {
+        custom_transport = DATALINK_CUSTOM;
     }
 #endif
 }
@@ -198,7 +247,17 @@ int datalink_send_pdu(
 #endif
 #if defined(BACDL_CUSTOM)
         case DATALINK_CUSTOM:
-            bytes = custom_send_pdu(dest, npdu_data, pdu, pdu_len);
+            switch (custom_transport) {
+                case DATALINK_BIP:
+                    bytes = custom_BIP_send_pdu(dest, npdu_data, pdu, pdu_len);
+                    break;
+                case DATALINK_MSTP:
+                    bytes = custom_dlmstp_send_pdu(dest, npdu_data, pdu, pdu_len);
+                    break;
+                default:
+                    bytes = 0;
+            }
+            
             break;
 #endif
        default:
@@ -253,7 +312,16 @@ uint16_t datalink_receive(
 #endif
 #if defined(BACDL_CUSTOM)
         case DATALINK_CUSTOM:
-            bytes = custom_receive(src, pdu, max_pdu, timeout);
+            switch (custom_transport) {
+                case DATALINK_BIP:
+                    bytes = datalink_custom_BIP_receive(src, pdu, max_pdu, timeout);
+                    break;
+                case DATALINK_MSTP:
+                    bytes = datalink_custom_dlmstp_receive(src, pdu, max_pdu, timeout);
+                default:
+                    bytes = 0;
+            }
+            
             break;
 #endif
         default:
@@ -348,6 +416,13 @@ void datalink_get_broadcast_address(BACNET_ADDRESS *dest)
             bsc_get_broadcast_address(dest);
             break;
 #endif
+#if defined(BACDL_CUSTOM)
+        case DATALINK_CUSTOM:
+            Datalink_Transport = custom_transport;
+            datalink_get_broadcast_address(dest);
+            Datalink_Transport = DATALINK_CUSTOM;
+            break;
+#endif
         default:
             break;
     }
@@ -391,6 +466,13 @@ void datalink_get_my_address(BACNET_ADDRESS *my_address)
 #if defined(BACDL_BSC)
         case DATALINK_BSC:
             bsc_get_my_address(my_address);
+            break;
+#endif
+#if defined(BACDL_CUSTOM)
+        case DATALINK_CUSTOM:
+            Datalink_Transport = custom_transport;
+            datalink_get_my_address(my_address);
+            Datalink_Transport = DATALINK_CUSTOM;
             break;
 #endif
         default:
@@ -549,3 +631,5 @@ void datalink_maintenance_timer(uint16_t seconds)
     (void)seconds;
 }
 #endif
+
+

@@ -1,6 +1,8 @@
 #ifndef ARDUINO_BACNET_CONFIGS_H
 #define ARDUINO_BACNET_CONFIGS_H
 
+#include "bacnet/bacdef.h"
+
 
 //Define all needed for multimode!
 
@@ -121,14 +123,16 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+void datalink_custom_set(char *datalink_string);
 
-int bacnet_router_custom_datalink_type(void);
+
+
 
 #ifdef __cplusplus
 }
-#endif
+#endif //__cplusplus
 
-#endif
+#endif //BACNET_ROUTER
 
 // for confirmed messages, this is the number of transactions
 // that we hold in a queue waiting for timeout.

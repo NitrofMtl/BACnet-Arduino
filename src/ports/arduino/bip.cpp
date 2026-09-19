@@ -20,6 +20,7 @@
 //#include "socketWrapper.h"
 //#include "w5100Wrapper.h"
 
+
 #include <Udp.h>
 #include "bacnet_udp_port.h"
 
@@ -27,6 +28,9 @@
 #include <stdio.h> /* for standard i/o, like printing */
 #endif
 
+#if defined (ROUTER_DEVICE)
+#include "dlcustom.h"
+#endif
 
 UDP* bacnetUdp; 
 
@@ -77,7 +81,6 @@ bool bip_init(char *ifname)
 
     return true;
 }
-
 
 
 /** Function to send a packet out the BACnet/IP socket (Annex J).
@@ -205,3 +208,115 @@ uint16_t bip_receive(
 }
 
 
+#if defined (BACDL_BIP)
+struct custom_BIP_packet_t{
+    BACNET_ADDRESS dest;
+    uint8_t pdu[BIP_MPDU_MAX];
+    unsigned pdu_len;
+    bool pending;
+};
+
+static custom_BIP_packet_t custom_BIP_packet;
+
+
+uint16_t datalink_custom_BIP_receive(
+    BACNET_ADDRESS *src, uint8_t *pdu, uint16_t max_pdu, unsigned timeout)
+{
+    (void)timeout;
+
+    if (!custom_BIP_packet.pending)
+        return 0;
+
+    uint8_t *buffer = custom_BIP_packet.pdu;
+    uint16_t len = custom_BIP_packet.pdu_len;
+
+    if (len < 4) {
+        custom_BIP_packet.pending = false;
+        return 0;
+    }
+
+    // Validate BACnet/IP BVLL type
+    if (buffer[0] != BVLL_TYPE_BACNET_IP) {
+        custom_BIP_packet.pending = false;
+        return 0;
+    }
+
+    // Validate BVLC function
+    if (buffer[1] != BVLC_ORIGINAL_UNICAST_NPDU &&
+        buffer[1] != BVLC_ORIGINAL_BROADCAST_NPDU) {
+        custom_BIP_packet.pending = false;
+        return 0;
+    }
+
+    // Extract source address from the captured destination.
+    //
+    // The captured BIP frame was generated for this destination,
+    // so preserve the same BACnet/IP address representation.
+    *src = custom_BIP_packet.dest;
+
+    uint16_t npdu_len = len - 4;
+
+    if (npdu_len > max_pdu) {
+        custom_BIP_packet.pending = false;
+        return 0;
+    }
+
+    memcpy(
+        pdu,
+        &buffer[4],
+        npdu_len);
+
+    custom_BIP_packet.pending = false;
+
+    return npdu_len;
+}
+
+
+int custom_BIP_send_pdu(
+    BACNET_ADDRESS *dest,
+    BACNET_NPDU_DATA *npdu_data,
+    uint8_t *pdu,
+    unsigned pdu_len)
+{
+    uint16_t mtu_len = pdu_len + 4;
+
+    (void)npdu_data;
+
+    if (!dest || !pdu)
+        return 0;
+
+    if (mtu_len > sizeof(custom_BIP_packet.pdu))
+        return 0;
+
+    if (custom_BIP_packet.pending)
+        return 0;
+
+    custom_BIP_packet.dest = *dest;
+
+    custom_BIP_packet.pdu[0] = BVLL_TYPE_BACNET_IP;
+
+    if (dest->mac_len == 0) {
+        custom_BIP_packet.pdu[1] =
+            BVLC_ORIGINAL_BROADCAST_NPDU;
+    } else {
+        custom_BIP_packet.pdu[1] =
+            BVLC_ORIGINAL_UNICAST_NPDU;
+    }
+
+    encode_unsigned16(
+        &custom_BIP_packet.pdu[2],
+        mtu_len);
+
+    memcpy(
+        &custom_BIP_packet.pdu[4],
+        pdu,
+        pdu_len);
+
+    custom_BIP_packet.pdu_len = mtu_len;
+    custom_BIP_packet.pending = true;
+
+    return mtu_len;
+}
+
+
+#endif

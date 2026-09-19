@@ -206,13 +206,17 @@ class BacnetRouterClass {
         uint16_t dnet
     );
     void datalinkSet(BacnetDatalink portType);
+    void customDatalinkSet(BacnetDatalink portType);
+#if defined(ROUTER_DEVICE)
+    bool isRouterDevice(RouterPort *port, BACNET_ADDRESS routeDest);
     bool handleLocalDevice(
         uint16_t snet,
         BACNET_ADDRESS &src,
-        const BACNET_ADDRESS &dest,
         uint8_t *apdu,
         uint16_t apduLen
     );
+#endif
+    
 
 
     RouterPort _ports[BACNET_ROUTER_MAX_PORTS] = {};

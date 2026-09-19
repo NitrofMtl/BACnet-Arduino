@@ -19,8 +19,33 @@ Here all datalink macro function. to see how much need to be defined.. ?
 
 */
 
-#if defined(BACDL_CUSTOM)
+#if defined(ROUTER_DEVICE)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+uint16_t datalink_custom_BIP_receive(
+    BACNET_ADDRESS *src, uint8_t *pdu, uint16_t max_pdu, unsigned timeout);
+int custom_BIP_send_pdu(
+    BACNET_ADDRESS *dest,
+    BACNET_NPDU_DATA *npdu_data,
+    uint8_t *pdu,
+    unsigned pdu_len);
+#ifdef __cplusplus
+}
+#endif
+
+
+uint16_t datalink_custom_dlmstp_receive(
+    BACNET_ADDRESS *src, uint8_t *pdu, uint16_t max_pdu, unsigned timeout);
+int custom_dlmstp_send_pdu(
+    BACNET_ADDRESS *dest,
+    BACNET_NPDU_DATA *npdu_data,
+    uint8_t *pdu,
+    unsigned pdu_len);
+
+
+/*
 uint16_t custom_receive_pdu(
     BACNET_ADDRESS *src, uint8_t *pdu, uint16_t max_pdu, unsigned timeout
 );
@@ -32,7 +57,7 @@ int custom_send(
     unsigned pdu_len
 );
 
-
+*/
 typedef struct {
     BACNET_ADDRESS dest;
     uint8_t pdu[DLMSTP_MPDU_MAX]; //must be macroed....
