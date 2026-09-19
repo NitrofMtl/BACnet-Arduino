@@ -4,18 +4,7 @@
 #include "ports/arduino/bacnet.h"
 #include "ports/arduino/bacnet_mstp.h"
 
-//#include "ports/arduino/bacnet_core.h"
 
-#ifndef BACNET_DATALINK_BIP
-#define BACNET_DATALINK_BIP 1
-#endif
-/*
-#ifndef BACNET_DATALINK_MSTP
-#define BACNET_DATALINK_MSTP 2
-#endif
-*/
-//#define MAXPORTS 2  ///xxxmaybe move this in configs header
-//max port should be macroed fron num enable transport defined! in configs
 
 #define BACNET_ROUTER_MAX_ROUTES 128
 
@@ -41,9 +30,6 @@ enum class BacnetDatalink : uint8_t {
 #endif
 #ifdef BACNET_ROUTER_BSC
     BSC,
-#endif
-#ifdef BACNET_ROUTER_CUSTOM
-    CUSTOM,
 #endif
 };
 
@@ -206,7 +192,6 @@ class BacnetRouterClass {
         uint16_t dnet
     );
     void datalinkSet(BacnetDatalink portType);
-    void customDatalinkSet(BacnetDatalink portType);
 #if defined(ROUTER_DEVICE)
     bool isRouterDevice(RouterPort *port, BACNET_ADDRESS routeDest);
     bool handleLocalDevice(

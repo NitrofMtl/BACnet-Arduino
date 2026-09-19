@@ -2,8 +2,6 @@
 #include "bacnet/datalink/datalink.h"
 #include "bacnet/npdu.h"
 
-#include "ports/arduino/dlcustom.h"
-
 #include "bacnet_debug.h"
 
 void printBacnetAddress(char* tag, const BACNET_ADDRESS &addr)
@@ -96,51 +94,6 @@ void BacnetRouterClass::poll()
 {
     static uint8_t pdu[512];
 
-#if defined(ROUTER_DEVICE)
-    RouterPort &localPort = _ports[_routerDevice.portIndex];
-    datalinkSet(BacnetDatalink::CUSTOM);
-
-    BACNET_ADDRESS src = {};
-    uint16_t len = datalink_receive(
-        &src,
-        pdu,
-        sizeof(pdu),
-        0);
-        //BACNET_ADDRESS src = {};
-
-    if (len > 0) {
-
-
-routingNpduHandler(
-    2000,
-    src,
-    pdu,
-    sizeof(pdu));
-        Serial.println("Receive from custom local device");
-        Serial.print("CUSTOM RX len: ");
-        Serial.println(len);
-
-        Serial.print("CUSTOM RX PDU: ");
-
-        for (uint16_t i = 0; i < len; i++) {
-            if (pdu[i] < 0x10)
-                Serial.print("0");
-
-            Serial.print(pdu[i], HEX);
-            Serial.print(" ");
-        }
-        Serial.println();
-        printBacnetAddress("src: ", src);
-
-        routingNpduHandler(
-            localPort.net,
-            src,
-            pdu,
-            len);
-    }
-
-#endif
-
     for (uint8_t i = 0; i < _portsCount; i++) {
         RouterPort &port = _ports[i];
 
@@ -154,21 +107,6 @@ routingNpduHandler(
             0);
 
         if (len > 0) {
-                    Serial.print("regular receive RX len: ");
-                    Serial.println(len);
-
-                    Serial.print("RX PDU: ");
-
-                    for (uint16_t i = 0; i < len; i++) {
-                        if (pdu[i] < 0x10)
-                            Serial.print("0");
-
-                        Serial.print(pdu[i], HEX);
-                        Serial.print(" ");
-                    }
-                    Serial.println();
-                    printBacnetAddress("src: ", src);
-
             routingNpduHandler(
                 port.net,
                 src,
@@ -293,7 +231,6 @@ bool BacnetRouterClass::routeApdu(
     uint8_t *apdu,
     uint16_t apduLen)
 {
-    Serial.println("routeApdu");
     // Global broadcast
     if (dest.net == BACNET_BROADCAST_NETWORK) {
         return routeBroadcastApdu(snet, src, npdu, apdu, apduLen);
@@ -304,7 +241,6 @@ bool BacnetRouterClass::routeApdu(
         RouterPort *port = findPort(dest.net);
 
         if (!port) {
-            Serial.println("routeApdu: routeUnknownApdu");
             return routeUnknownApdu(
                 snet, src, dest, npdu, apdu, apduLen);
         }
@@ -355,8 +291,6 @@ bool BacnetRouterClass::routeBroadcastApdu(
         //Broadcast for local device
         if (_routerDevice.portIndex < _portsCount) {
             datalinkSet(port.portType);
-            Serial.print("broadcst for local device apdu handler PDU len: ");
-            Serial.println(apduLen);
             apdu_handler(&src, apdu, apduLen);
         }
 #endif //ROUTER_DEVICE
@@ -387,17 +321,10 @@ bool BacnetRouterClass::routeDirectApdu(
     RouterPort *port = nullptr;
     BACNET_ADDRESS routeDest = dest;
     BACNET_ADDRESS routeSrc = src;
-    Serial.println("routeDirectApdu");
-    
 
 #if defined(ROUTER_DEVICE)
         // No DNET/DADR:handle router device
         if (dest.net == 0) {
-            Serial.println("routeDirectApdu: Got direct call");
-            /*RouterPort *sPort = findPort(snet);
-            datalinkSet(sPort->portType);
-            apdu_handler(&src, apdu, apduLen);
-            return true;*/
             return handleLocalDevice(snet, src, apdu, apduLen);
         }
 #endif
@@ -406,12 +333,6 @@ bool BacnetRouterClass::routeDirectApdu(
 #if defined(ROUTER_DEVICE)        
         // Have DNET/DADR: handle router device
         if (isRouterDevice(port, routeDest)) {
-            Serial.println("routeDirectApdu: Got routed call");
-        /*    RouterPort *sPort = findPort(snet);
-            datalinkSet(sPort->portType);
-            apdu_handler(&src, apdu, apduLen);
-            Serial.println("GOT RouterDevice APDU HANDLER !!!!!!");
-            return true;*/
             return handleLocalDevice(snet, src, apdu, apduLen);
         }
 #endif        
@@ -1101,63 +1022,6 @@ void BacnetRouterClass::datalinkSet(BacnetDatalink portType)
 
         break;
 #endif
-#ifdef BACNET_ROUTER_CUSTOM
-    case BacnetDatalink::CUSTOM:
-        datalink_set(static_cast<char*>("custom"));
-        break;
-#endif
-    default:
-        break;
-    }
-}
-
-
-void BacnetRouterClass::customDatalinkSet(BacnetDatalink portType)
-{
-    switch (portType){
-
-#ifdef BACNET_ROUTER_BIP
-    case BacnetDatalink::BIP:
-        datalink_custom_set(static_cast<char*>("bip"));
-        break;
-#endif 
-#ifdef BACNET_ROUTER_ETHERNET
-    case BacnetDatalink::ETHERNET:
-        datalink_custom_set(static_cast<char*>("ethernet"));
-        break;
-#endif
-#ifdef BACNET_ROUTER_ARCNET
-    case BacnetDatalink::ARCNET:
-        datalink_custom_set(static_cast<char*>("arcnet"));
-        break;
-#endif
-#ifdef BACNET_ROUTER_BIP6
-    case BacnetDatalink::BIP6:
-        datalink_custom_set(static_cast<char*>("bip6"));
-        break;
-#endif
-#ifdef BACNET_ROUTER_MSTP
-    case BacnetDatalink::MSTP:
-        datalink_custom_set(static_cast<char*>("mstp"));
-        break;
-#endif
-#ifdef BACNET_ROUTER_ZIGBEE
-    case BacnetDatalink::ZIGBEE:
-        datalink_custom_set(static_cast<char*>("zigbee"));
-
-        break;
-#endif
-#ifdef BACNET_ROUTER_BSC
-    case BacnetDatalink::BSC:
-        datalink_custom_set(static_cast<char*>("bsc"));
-
-        break;
-#endif
-#ifdef BACNET_ROUTER_CUSTOM
-    case BacnetDatalink::CUSTOM:
-        datalink_custom_set(static_cast<char*>("custom"));
-        break;
-#endif
     default:
         break;
     }
@@ -1181,7 +1045,6 @@ bool BacnetRouterClass::handleLocalDevice(
 #if defined(ROUTER_DEVICE)
 bool BacnetRouterClass::isRouterDevice(RouterPort *port, BACNET_ADDRESS routeDest)
 {
-    Serial.println("isRouterDevice called");
     datalinkSet(port->portType);
     BACNET_ADDRESS myAddress;
     datalink_get_my_address(&myAddress);
@@ -1196,26 +1059,3 @@ bool BacnetRouterClass::isRouterDevice(RouterPort *port, BACNET_ADDRESS routeDes
 }
 #endif
 
-/*
-custom datalink TO DO:
--add custom datalink to the list
--add get my address custom XXX not needed
--add send_pdu costom
--add datalink receive
-
--Sequence:
-
-    -outgoing packet:
-        -datalinkset to custom
-        -apdu handler sendPdu
-            -payload store into buffer
-        -poll set datalink to custom
-        -datalink receive decode packet (is datalink could be same as local? see sequence fort snet)
-        -package decode and handler by router
-
-    -incomming packet:
-        -route handeling could follow normal path until loacl mac is found, then call apduHandler (already implemented???)
-
-
-
-*/

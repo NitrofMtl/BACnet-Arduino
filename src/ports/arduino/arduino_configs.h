@@ -29,12 +29,6 @@
 //Router device's configuration
 #define ROUTER_DEVICE
 
-//Custom datalink configurations
-#define BACDL_CUSTOM
-#ifdef BACDL_CUSTOM
-#define BACNET_ROUTER_CUSTOM
-#define BACDL_CUSTOM_HEADER "ports/arduino/dlcustom.h"
-#endif
 
 #if defined(ROUTER_DEVICE)
 //uncomment the port you want to use as local device
@@ -119,18 +113,6 @@
      BACNET_ROUTER_MSTP_PORTS + \
      BACNET_ROUTER_ZIGBEE_PORTS + \
      BACNET_ROUTER_BSC_PORTS)
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-void datalink_custom_set(char *datalink_string);
-
-
-
-
-#ifdef __cplusplus
-}
-#endif //__cplusplus
 
 #endif //BACNET_ROUTER
 
