@@ -249,7 +249,7 @@ void BACnetSchedule::recalculate_PV(uint32_t inst)
         Serial.println("Schedule value found for today");
         return;
     };
-
+/* ###remove -> restore value must be only the actual day, still kept section for legacy
     BACNET_TIME endOfDay = {};
     endOfDay.hundredths = 99;
     endOfDay.sec = 59;
@@ -261,6 +261,7 @@ void BACnetSchedule::recalculate_PV(uint32_t inst)
             return;
         }
     }
+*/
     // Nothing found in the last 7 days
     memcpy(&desc->Present_Value, &desc->Schedule_Default, sizeof(desc->Present_Value));
 }

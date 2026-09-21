@@ -705,7 +705,7 @@ BACnetSchedule::setSaveCallback(saveSchedule);
 BACnetSchedule::begin();
 ```
 
-This order is important.
+
 
 ## Restore Callback
 
@@ -810,6 +810,7 @@ The examples demonstrate functionality including:
 
 * BACnet/IP
 * BACnet MS/TP
+* BACnet router
 * device configuration
 * BACnet object creation
 * time callbacks

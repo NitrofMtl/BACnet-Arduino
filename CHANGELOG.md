@@ -1,6 +1,22 @@
 
 # Changelog
 
+## [0.6.0] Unreleased
+
+### Add
+- stm32RS485DMA support and example --->>> TO DO
+
+
+### Changed
+- restore schedule restoring to default 1 day scope
+- Make time handling internal --->>> TO DO
+
+### Fixed
+
+
+
+---
+
 ## [0.5.0] Unreleased
 
 ### Add
@@ -10,13 +26,15 @@
 ### Changed
 - Remove mbed_mktime.h inclusion from bacnet.h
 - Add macro for Schedule size to arduino-configs
-- Add to readme <#define> parameter instructions  <<--- TO DO !!!!>> 
+- Add to readme <#define> parameter instructions
 
 ### Fixed
 - remove brace initializaqtion of ScheduleCallback for better compatibility
 - Guard devices infos setter
 - bip receive port indexing
 - BacnetMstp apdu handler arguments ordering
+
+---
 
 ## [0.4.0]
 
