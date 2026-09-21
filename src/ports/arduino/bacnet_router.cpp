@@ -114,6 +114,12 @@ void BacnetRouterClass::poll()
                 len);
         }
     }
+    
+#if defined(ROUTER_DEVICE)
+    // Local device periodic processing
+    bacnet_handle_reinitialize();
+    BACnetSchedule::handler();
+#endif
 }
 
 
@@ -177,7 +183,7 @@ int BacnetRouterClass::encodeRoutedPdu(
     if (!routedSrcAddress(routerSrc, snet, src))
         return 0;
 
-    int npduLen =
+    unsigned int npduLen =
         npdu_encode_pdu(pdu, &dest, &routerSrc, &npdu);
 
     if (npduLen <= 0)
@@ -320,7 +326,6 @@ bool BacnetRouterClass::routeDirectApdu(
 {
     RouterPort *port = nullptr;
     BACNET_ADDRESS routeDest = dest;
-    BACNET_ADDRESS routeSrc = src;
 
 #if defined(ROUTER_DEVICE)
         // No DNET/DADR:handle router device
@@ -746,7 +751,7 @@ void BacnetRouterClass::sendIAmRouterToNetwork(
         false,
         MESSAGE_PRIORITY_NORMAL);
 
-    int pduLen = npdu_encode_pdu(
+    unsigned int pduLen = npdu_encode_pdu(
         _txBuffer,
         &dest,
         nullptr,
@@ -756,7 +761,7 @@ void BacnetRouterClass::sendIAmRouterToNetwork(
         return;
 
     if (net) {
-        if ((pduLen + 2) > TX_BUFFER_SIZE)
+        if ((pduLen + 2u) > TX_BUFFER_SIZE)
             return;
 
         pduLen += encode_unsigned16(
@@ -769,7 +774,7 @@ void BacnetRouterClass::sendIAmRouterToNetwork(
             if (_ports[i].net == snet)
                 continue;
 
-            if ((pduLen + 2) > TX_BUFFER_SIZE)
+            if ((pduLen + 2u) > TX_BUFFER_SIZE)
                 break;
 
             pduLen += encode_unsigned16(
@@ -786,7 +791,7 @@ void BacnetRouterClass::sendIAmRouterToNetwork(
             if (_routes[i].port->net == snet)
                 continue;
 
-            if ((pduLen + 2) > TX_BUFFER_SIZE)
+            if ((pduLen + 2u) > TX_BUFFER_SIZE)
                 break;
 
             pduLen += encode_unsigned16(
@@ -882,7 +887,7 @@ void BacnetRouterClass::sendInitializeRoutingTableAck(
         false,
         MESSAGE_PRIORITY_NORMAL);
 
-    int pduLen = npdu_encode_pdu(
+    unsigned int pduLen = npdu_encode_pdu(
         _txBuffer,
         &dest,
         nullptr,
@@ -892,14 +897,14 @@ void BacnetRouterClass::sendInitializeRoutingTableAck(
         return;
 
     // Number of ports included in the routing table.
-    if ((pduLen + 1) > TX_BUFFER_SIZE)
+    if ((pduLen + 1u) > TX_BUFFER_SIZE)
         return;
 
     _txBuffer[pduLen++] = _portsCount;
 
     // Encode each directly connected port.
     for (uint8_t i = 0; i < _portsCount; i++) {
-        if ((pduLen + 4) > TX_BUFFER_SIZE)
+        if ((pduLen + 4u) > TX_BUFFER_SIZE)
             break;
 
         pduLen += encode_unsigned16(
@@ -947,7 +952,7 @@ void BacnetRouterClass::sendRejectMessageToNetwork(
         false,
         MESSAGE_PRIORITY_NORMAL);
 
-    int pduLen = npdu_encode_pdu(
+    unsigned int pduLen = npdu_encode_pdu(
         _txBuffer,
         &dest,
         nullptr,
@@ -957,14 +962,14 @@ void BacnetRouterClass::sendRejectMessageToNetwork(
         return;
 
     // Reject reason
-    if (pduLen + 1 > TX_BUFFER_SIZE)
+    if (pduLen + 1u > TX_BUFFER_SIZE)
         return;
 
     _txBuffer[pduLen++] = rejectReason;
 
     // DNET is optional.
     if (dnet) {
-        if (pduLen + 2 > TX_BUFFER_SIZE)
+        if (pduLen + 2u > TX_BUFFER_SIZE)
             return;
 
         pduLen += encode_unsigned16(
@@ -986,41 +991,53 @@ void BacnetRouterClass::datalinkSet(BacnetDatalink portType)
     switch (portType){
 
 #ifdef BACNET_ROUTER_BIP
-    case BacnetDatalink::BIP:
-        datalink_set(static_cast<char*>("bip"));
+    case BacnetDatalink::BIP: {
+        char bipName[] = "bip";
+        datalink_set(bipName);
         break;
+    }
 #endif 
 #ifdef BACNET_ROUTER_ETHERNET
-    case BacnetDatalink::ETHERNET:
-        datalink_set(static_cast<char*>("ethernet"));
+    case BacnetDatalink::ETHERNET: {
+        char ethernetName[] = "ethernet";
+        datalink_set(ethernetName);
         break;
+    }
 #endif
 #ifdef BACNET_ROUTER_ARCNET
-    case BacnetDatalink::ARCNET:
-        datalink_set(static_cast<char*>("arcnet"));
+    case BacnetDatalink::ARCNET: {
+        char arcnetName[] = "arcnet";
+        datalink_set(arcnetName);
         break;
+    }
 #endif
 #ifdef BACNET_ROUTER_BIP6
-    case BacnetDatalink::BIP6:
-        datalink_set(static_cast<char*>("bip6"));
+    case BacnetDatalink::BIP6: {
+        char bip6Name = "bip6";
+        datalink_set(bip6Name);
         break;
+    }
 #endif
 #ifdef BACNET_ROUTER_MSTP
-    case BacnetDatalink::MSTP:
-        datalink_set(static_cast<char*>("mstp"));
+    case BacnetDatalink::MSTP: {
+        char mstpName[] = "mstp";
+        datalink_set(mstpName);
         break;
+    }
 #endif
 #ifdef BACNET_ROUTER_ZIGBEE
-    case BacnetDatalink::ZIGBEE:
-        datalink_set(static_cast<char*>("zigbee"));
-
+    case BacnetDatalink::ZIGBEE: {
+    char zigbeeName = "zigbee";
+        datalink_set(zigbeeName);
         break;
+    }
 #endif
 #ifdef BACNET_ROUTER_BSC
-    case BacnetDatalink::BSC:
-        datalink_set(static_cast<char*>("bsc"));
-
+    case BacnetDatalink::BSC: {
+        char bscName = "bsc";
+        datalink_set(bscName);
         break;
+    }
 #endif
     default:
         break;

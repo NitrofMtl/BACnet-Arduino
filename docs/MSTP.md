@@ -11,6 +11,15 @@ This allows BACnet-Arduino to be used with different Arduino RS-485 implementati
 For functionality common to BACnet/IP and BACnet MS/TP, see the main [README](../README.md).
 
 ---
+# Enabling datalink
+
+Before using BACnet MS/TP, uncomment the MS/TP datalink definition in 'ports/arduino/arduino_configs.h' to enable the datalink.
+
+```cpp
+//MSTP configuration
+//#define BACDL_MSTP  //<--- uncomment
+```
+
 
 # MS/TP Transport Callbacks
 

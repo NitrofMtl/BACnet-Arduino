@@ -7,53 +7,55 @@
 //Define all needed for multimode!
 
 //Ethernet configuration
-#define BACDL_BIP
+#define BACDL_BIP //<--- Uncomment
 
 //MSTP configuration
-#define BACDL_MSTP
+#define BACDL_MSTP //<--- Uncomment
 
 //ARCNET configurations
-//#defineBACDL_ARCNET
+//#define BACDL_ARCNET //<--- Uncomment
 
 //BIP6 configurations
-//#define BACDL_BIP6
+//#define BACDL_BIP6 //<--- Uncomment
 
 //ZIGBEE configurations
-//#define BACDL_ZIGBEE
+//#define BACDL_ZIGBEE //<--- Uncomment
 
 //BSC configurations
-//#define BACDL_BSC
+//#define BACDL_BSC //<--- Uncomment
 
-#define BACNET_ROUTER
+//Router configuration
+#define BACNET_ROUTER //<--- Uncomment
 
+#ifdef BACNET_ROUTER
 //Router device's configuration
-#define ROUTER_DEVICE
+#define ROUTER_DEVICE //<--- Uncomment
+#endif
+
+// for confirmed messages, this is the number of transactions
+// that we hold in a queue waiting for timeout.
+// Configure to zero if you don't want any confirmed messages
+// Configure from 1..255 for number of outstanding confirmed
+// requests available.
+//Get low for les RAM usage
+//255	Maximum/full-size table; huge RAM cost
+//127	Plenty for a fairly active client
+//31	Good embedded default
+//16	Probably plenty for many controllers
+//8	Very reasonable small controller
+//4	Fine if you have little simultaneous client activity
+//2	Possible for a very constrained device
+//1	Minimum practical value
+#define MAX_TSM_TRANSACTIONS 31
+
+#define MAX_ADDRESS_CACHE 63
+
+#define MAX_SCHEDULES 1
+
+#define BACNET_DAILY_SCHEDULE_TIME_VALUES_SIZE 10
 
 
-#if defined(ROUTER_DEVICE)
-//uncomment the port you want to use as local device
-#if defined(BACDL_ARCNET)
-//#define LOCAL_DEVICE_ARCNET
-#endif
-#if defined(BACDL_ETHERNET)
-//#define LOCAL_DEVICE_ETHERNET
-#endif
-#if defined(BACDL_BIP)
-//#define LOCAL_DEVICE_BIP
-#endif
-#if defined(BACDL_BIP6)
-//#define LOCAL_DEVICE_BIP6
-#endif
-#if defined(BACDL_MSTP)
-#define LOCAL_DEVICE_MSTP
-#endif
-#if defined(BACDL_ZIGBEE)
-//#define LOCAL_DEVICE_ZIGBEE
-#endif
-#if defined(BACDL_BSC)
-//#define LOCAL_DEVICE_BSC
-#endif
-#endif//ROUTER_DEVICE
+
 
 #if defined(BACDL_BIP) &&  defined(BACNET_ROUTER)
 #define BACNET_ROUTER_BIP
@@ -115,28 +117,5 @@
      BACNET_ROUTER_BSC_PORTS)
 
 #endif //BACNET_ROUTER
-
-// for confirmed messages, this is the number of transactions
-// that we hold in a queue waiting for timeout.
-// Configure to zero if you don't want any confirmed messages
-// Configure from 1..255 for number of outstanding confirmed
-// requests available.
-//Get low for les RAM usage
-//255	Maximum/full-size table; huge RAM cost
-//127	Plenty for a fairly active client
-//31	Good embedded default
-//16	Probably plenty for many controllers
-//8	Very reasonable small controller
-//4	Fine if you have little simultaneous client activity
-//2	Possible for a very constrained device
-//1	Minimum practical value
-#define MAX_TSM_TRANSACTIONS 31
-
-#define MAX_ADDRESS_CACHE 63
-
-#define MAX_SCHEDULES 1
-
-#define BACNET_DAILY_SCHEDULE_TIME_VALUES_SIZE 10
-
 
 #endif // ARDUINO_BACNET_CONFIGS_H

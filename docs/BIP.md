@@ -8,6 +8,15 @@ For functionality common to BACnet/IP and BACnet MS/TP, see the main [README](..
 
 ---
 
+# BACnet/IP Enable datalink
+
+BACnet/IP is enabled by default when no other BACnet datalink is enabled. If multiple datalinks are used, uncomment the BACnet/IP datalink definition in ports/arduino/arduino_configs.h to enable it explicitly.
+
+```cpp
+//Ethernet configuration
+//#define BACDL_BIP //<--- Uncomment
+```
+
 # BACnet/IP Setup
 
 The Arduino port uses an `EthernetUDP` object for BACnet/IP.

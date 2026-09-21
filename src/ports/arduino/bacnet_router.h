@@ -4,7 +4,7 @@
 #include "ports/arduino/bacnet.h"
 #include "ports/arduino/bacnet_mstp.h"
 
-
+#define NO_ROUTER_DEVICE 0xFFu
 
 #define BACNET_ROUTER_MAX_ROUTES 128
 
@@ -63,7 +63,7 @@ class BacnetRouterClass {
         uint16_t net;
     };
     struct RouterDevice {
-    int8_t portIndex = -1u;
+    int8_t portIndex = NO_ROUTER_DEVICE;
     };
     bool attachRouterDevice(BacnetDatalink portType);
     
@@ -201,13 +201,11 @@ class BacnetRouterClass {
         uint16_t apduLen
     );
 #endif
-    
-
 
     RouterPort _ports[BACNET_ROUTER_MAX_PORTS] = {};
-    uint8_t _portsCount = 0;
     RouterRoute _routes[BACNET_ROUTER_MAX_ROUTES];
     uint16_t _routesCount = 0;
+    uint8_t _portsCount = 0;
     RouterDevice _routerDevice;
 
 

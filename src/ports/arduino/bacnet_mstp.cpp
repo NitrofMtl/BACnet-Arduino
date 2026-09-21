@@ -6,8 +6,6 @@
 #include "bacnet/datalink/dlmstp.h"
 
 #include "bacnet/basic/object/device.h"
-//#include "ports/arduino/bacnet_udp_port.h"
-//#include "bacnet/datalink/bip.h"
 #include "bacnet/basic/npdu/h_npdu.h"
 #include "bacnet/basic/service/h_apdu.h"
 #include "bacnet/basic/service/h_whois.h"
@@ -155,7 +153,7 @@ void bacnet_Poll_mstp()
     if (len > 0) {
         BACNET_NPDU_DATA npdu_data;
 
-        int apdu_offset = bacnet_npdu_decode(&pdu[0], len, &src, NULL, &npdu_data);
+        int apdu_offset = bacnet_npdu_decode(&pdu[0], len, nullptr, &src, &npdu_data);
         if (apdu_offset > 0 && len > apdu_offset) {
             apdu_handler(&src, &pdu[apdu_offset], len - apdu_offset);
         }

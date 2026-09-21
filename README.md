@@ -1,12 +1,12 @@
 # BACnet-Arduino
 
-Arduino BACnet library based on the open-source [bacnet-stack](https://github.com/bacnet-stack/bacnet-stack) project.
+Arduino BACnet library based on the open-source bacnet-stack project.
 
-BACnet-Arduino provides an Arduino-oriented interface to the BACnet stack, including BACnet/IP and BACnet MS/TP communication, BACnet object creation and access, time integration, device reinitialization, and BACnet Schedule support.
+BACnet-Arduino provides an Arduino-oriented interface to the BACnet stack, including BACnet object creation and access, time integration, device reinitialization, and BACnet Schedule support. The Arduino port can use the BACnet datalinks supported by the underlying stack; currently, examples are provided for BACnet/IP and BACnet MS/TP.
 
-The library keeps the BACnet protocol stack largely unchanged while providing an Arduino-specific port layer.
+The library keeps the BACnet protocol stack largely unchanged while providing an Arduino-specific port layer. It also provides BACnet/IP ↔ MS/TP routing through the BacnetRouterClass.
 
-> **Status:** 0.4.0
+> **Status:** 0.5.0
 
 ---
 
@@ -14,6 +14,7 @@ The library keeps the BACnet protocol stack largely unchanged while providing an
 
 * BACnet/IP support
 * BACnet MS/TP support
+* BACnet/IP ↔ MS/TP routing
 * Arduino UDP transport integration
 * Arduino RS-485 / MS/TP transport integration
 * BACnet device configuration
@@ -34,7 +35,7 @@ BACnet-Arduino is based on the full `bacnet-stack` protocol implementation, but 
 
 The actual RAM and flash usage depends on the selected BACnet features, objects, configuration, Arduino core, and application.
 
-As a reference, the current BACnet-Arduino configuration on an Arduino Opta uses approximately:
+As a reference, the current BACnet-Arduino BIP example on an Arduino Opta uses approximately:
 
 ```text
 RAM:   19.5% (102144 bytes / 523624 bytes)
@@ -51,23 +52,25 @@ Applications should still verify memory usage on their target board before deplo
 
 ## Basic Architecture
 
-BACnet-Arduino is divided into three main parts:
+BACnet-Arduino provides independent interfaces for BACnet datalinks and routing. Applications can use a datalink directly, combine multiple datalinks through BacnetRouterClass, or use the router with an optional local BACnet Device.
 
 ```text
-Application / Arduino Sketch
-          |
-          v
-    Arduino port API
-          |
-          v
-     bacnet-stack
-          |
-          +------------------+
-          |                  |
-          v                  v
-       UDP/IP              RS-485
-      BACnet/IP           BACnet MS/TP
+                Arduino Sketch
+                        |
+        +---------------+----------------+
+        |               |                |
+        v               v                v
+    BIP API          MS/TP API       Router API
+        |               |                |
+        v               v                v
+    BACnet/IP       BACnet MS/TP    BIP <-> MS/TP <-> ...
+        |               |                |
+        +---------------+----------------+
+                        |
+                        v
+                bacnet-stack
 ```
+The router currently supports BACnet/IP and BACnet MS/TP; additional datalinks supported by the underlying BACnet stack can be added to the router.
 
 The Arduino port provides the connection between the BACnet stack and the board-specific Arduino APIs.
 
@@ -98,7 +101,9 @@ For BACnet/IP, see [BACnet/IP Setup](docs/BIP.md).
 
 For BACnet MS/TP, see [BACnet MS/TP Setup](docs/MSTP.md).
 
-The sections below describe functionality common to both BACnet/IP and BACnet MS/TP applications.
+For BACnet Router, see [BACnet Router Setup](docs/ROUTER.md)
+
+The sections below describe functionality common to both BACnet/IP, BACnet MS/TP and Router applications.
 
 ---
 

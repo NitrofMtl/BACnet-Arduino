@@ -16,13 +16,13 @@
 
 
 const deviceInfos_t deviceInfos {
-    2,  //Name
-    "My Opta", //Location
+    2,  //Instance_number
+    "My Opta", //Name
     "Basic BACnet device running on Arduino",  //description
     "Mechanical room", //Location
     "Arduino", //Vendor name
     "Opta Bacnet", //Model name
-    "1.0" //Firmware revision
+    "1.0", //Firmware revision
     "0.1" //Application software version
 };
 
