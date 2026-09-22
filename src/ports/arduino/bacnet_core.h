@@ -127,5 +127,13 @@ void bacnet_handle_reinitialize();
  */
 void bacnet_init(const deviceInfos_t *deviceInfos);
 
+void setTimeCallback_set(void (*cb)(time_t));
+void bacnet_sync_time(BACNET_DATE *bdate, BACNET_TIME *btime, bool UTC);
+bool bacnet_get_time(
+    BACNET_DATE *bdate,
+    BACNET_TIME *btime,
+    int16_t *utc_offset_minutes,
+    bool *dst_active);
+
 
 #endif

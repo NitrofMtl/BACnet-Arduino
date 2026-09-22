@@ -9,7 +9,7 @@
 
 ### Changed
 - restore schedule restoring to default 1 day scope
-- Make time handling internal --->>> TO DO
+- Make time set/get handling internal
 
 ### Fixed
 

@@ -68,14 +68,6 @@ void setupNetwork();
 
 void setupBacnet();
 
-bool bacnet_get_time(
-    BACNET_DATE *bdate,
-    BACNET_TIME *btime,
-    int16_t *utc_offset_minutes,
-    bool *dst_active);
-
-void bacnet_sync_time(BACNET_DATE *bdate, BACNET_TIME *btime, bool UTC);
-
 void reinitColdStartCb();
 void setupSchedule();
 bool restoreSchedule(uint32_t inst, BACnetSchedule::SchedulePersistentData *data);
@@ -104,12 +96,7 @@ void setupNetwork()
 void setupBacnet()
 {
     bacnet_init(&deviceInfos);
-
-    // BACnet reads the current board time through this callback.
-    bacnet_time_callback_set(bacnet_get_time);//set time from ntp
-
-    // Allow BACnet Time Synchronization requests to update the board clock.
-    handler_timesync_set_callback_set(bacnet_sync_time);//allow bacnet time sync requests to set time
+    setTimeCallback_set(set_time);
 
     // Configure BACnet device control passwords.
     handler_dcc_password_set(DCC_PASSWORD);
@@ -153,43 +140,6 @@ void setupBacnet()
     Serial.println(Analog_Value_Present_Value(AV_0));
 }
 
-
-/**
- * @brief Get current BACnet system time
- *
- * Retrieves the current time from the board's authoritative clock source
- * (RTC or system time) and converts it into BACnet DATE/TIME format.
- *
- * This function MUST be implemented by each platform port.
- * It defines the READ path of the BACnet time subsystem.
- *
- * @param[out] bdate Pointer to BACnet_DATE structure to fill (must not be NULL)
- * @param[out] btime Pointer to BACnet_TIME structure to fill (must not be NULL)
- *
- * @return true if time was successfully retrieved and populated
- * @return false only in case of critical failure (no valid clock source)
- *
- * @note This function MUST NOT use NTP or external network time sources.
- *       It must rely on the board's internal time base (RTC/system clock).
- */
-bool bacnet_get_time(
-    BACNET_DATE *bdate,
-    BACNET_TIME *btime,
-    int16_t *utc_offset_minutes,
-    bool *dst_active)
-{
-    time_t epoch = time(nullptr);
-    tmElements_t tm_info = {};
-    breakTime(epoch, tm_info);
-
-    *bdate = BACnetSchedule::toBACnetDate(tm_info);
-    *btime = BACnetSchedule::toBACnetTime(tm_info);
-    *utc_offset_minutes = TIME_UTC_OFF_ESTERN_ADVANCE;
-
-    *dst_active = false; // NTPClient doesn't provide DST info, so we hardcode it here. You could implement your own DST logic if needed.
-
-    return true;
-}
 
 // ----------------------------------------------------------------------------- 
 // Arduino setup 
@@ -248,38 +198,6 @@ void loop() {
 
     // Update the Binary Input from the physical user button.
     Binary_Input_Present_Value_Set(BI_0, digitalRead(BTN_USER) == LOW ? BINARY_ACTIVE : BINARY_INACTIVE);
-}
-
-
-/**
- * @brief Synchronize board time from BACnet time service
- *
- * Updates the board's authoritative clock using a BACnet Time Synchronization
- * request (Local or UTC depending on implementation).
- *
- * This function MUST update the SAME time source used by bacnet_get_time().
- * It defines the WRITE path of the BACnet time subsystem.
- *
- * @param[in] bdate Pointer to BACNET_DATE received from BACnet stack
- * @param[in] btime Pointer to BACNET_TIME received from BACnet stack
- *
- * @return true if time was successfully applied
- * @return false if time update failed (hardware or conversion error)
- *
- * @note This function MUST NOT interact with NTP or external time clients.
- *       Only the board's internal time system (RTC/system time) may be updated.
- *
- * @warning Repeated calls must be safe and should not introduce drift.
- */
-void bacnet_sync_time(BACNET_DATE *bdate, BACNET_TIME *btime, bool UTC)
-{
-    // This example uses local time and therefore ignores the UTC flag. 
-    // A real application should convert UTC when UTC == true.
-    (void)UTC;
-
-    tmElements_t tm_info = BACnetSchedule::toTimeElements(*bdate, *btime);
-    time_t epoch_time = makeTime(tm_info);
-    set_time(epoch_time);
 }
 
 
@@ -365,6 +283,4 @@ void saveSchedule(uint32_t inst, const BACnetSchedule::SchedulePersistentData &d
 
     kv_set(key, &data, sizeof(data), 0);
 }
-
-
 

@@ -164,124 +164,45 @@ There are several callbacks, but **not all of them are required**.
 
 ---
 
-# Time Callback
+# Time API
 
-## `bacnet_time_callback_set()`
+BACnet-Arduino uses a **TimeLib-compatible API** as its internal time interface.
 
-BACnet needs access to the board's current time.
+The `WeeklyAlarm` library provides a compatibility layer between this interface and the POSIX-style time functions used by the BACnet stack.
 
-Register a callback:
+On non-POSIX platforms, **TimeLib is included as a library dependency** to provide the TimeLib-compatible functions. On POSIX platforms, the corresponding system time functions are used instead.
 
-```cpp
-bacnet_time_callback_set(bacnet_get_time);
-```
-
-The callback has this signature:
+The current time is obtained through:
 
 ```cpp
-bool bacnet_get_time(
-    BACNET_DATE *bdate,
-    BACNET_TIME *btime,
-    int16_t *utc_offset_minutes,
-    bool *dst_active);
+now()
 ```
 
-The callback must:
-
-1. Read the board's current authoritative clock.
-2. Convert it to BACnet date/time.
-3. Set the UTC offset.
-4. Set the daylight-saving state.
-5. Return `true` when the time was successfully provided.
-
-Example:
+Only the operation used to **set** the clock is application-dependent. Register a callback:
 
 ```cpp
-bool bacnet_get_time(
-    BACNET_DATE *bdate,
-    BACNET_TIME *btime,
-    int16_t *utc_offset_minutes,
-    bool *dst_active)
-{
-    time_t epoch = time(nullptr);
-    tmElements_t tm_info = {};
-    breakTime(epoch, tm_info);
-
-    *bdate = BACnetSchedule::toBACnetDate(tm_info);
-    *btime = BACnetSchedule::toBACnetTime(tm_info);
-    *dst_active = false;
-
-    return true;
-}
+setTimeCallback_set(bacnet_set_time);
 ```
 
-### Important requirement
-
-The callback should **not obtain time from NTP or another network service every time it is called**.
-
-Use an authoritative local time source such as:
-
-* RTC
-* system clock
-* board time maintained by the application
-
-NTP can be used to initially synchronize that clock.
-
----
-
-# BACnet Time Synchronization
-
-## `handler_timesync_set_callback_set()`
-
-If the application should allow another BACnet device to synchronize its clock, register a write callback:
+with the following signature:
 
 ```cpp
-handler_timesync_set_callback_set(bacnet_sync_time);
+void bacnet_set_time(time_t epoch);
 ```
 
-The callback is:
-
-```cpp
-void bacnet_sync_time(
-    BACNET_DATE *bdate,
-    BACNET_TIME *btime,
-    bool UTC);
-```
-
-The callback must update the **same clock used by `bacnet_get_time()`**.
+The callback should update the clock used by `now()`.
 
 For example:
 
 ```cpp
-void bacnet_sync_time(
-    BACNET_DATE *bdate,
-    BACNET_TIME *btime,
-    bool UTC)
+void bacnet_set_time(time_t epoch)
 {
-    // Handle UTC conversion if required by the application.
-    (void)UTC;
-
-    tmElements_t tm_info =
-        BACnetSchedule::toTimeElements(*bdate, *btime);
-
-    time_t epoch_time = makeTime(tm_info);
-    set_time(epoch_time);
+    // Update the board's clock.
 }
 ```
 
-### Important requirement
+The time-reading and POSIX compatibility functions are provided by the library.
 
-The read and write paths must use the same clock:
-
-```text
-BACnet
-  |
-  +---- bacnet_get_time() ----> board clock
-  |
-  +---- bacnet_sync_time() ---> board clock
-```
-
-Otherwise BACnet may read a different time than the one that was synchronized.
 
 ---
 
