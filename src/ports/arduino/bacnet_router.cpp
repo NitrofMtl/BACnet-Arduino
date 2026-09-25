@@ -26,7 +26,16 @@ void printBacnetAddress(char* tag, const BACNET_ADDRESS &addr)
     Serial.println("-----");
 }
 
-constexpr size_t TX_BUFFER_SIZE = max(DLMSTP_MPDU_MAX, BIP_MPDU_MAX);
+//constexpr size_t TX_BUFFER_SIZE = max(BACNET_DLMSTP_MPDU_MAX, BACNET_BIP_MPDU_MAX);
+constexpr size_t TX_BUFFER_SIZE = constexpr_max(
+    BACNET_BIP_MPDU_MAX,
+    BACNET_ARCNET_MPDU_MAX,
+    BACNET_BIP6_MPDU_MAX,
+    BACNET_DLMSTP_MPDU_MAX,
+    BACNET_ETHERNET_MPDU_MAX,
+    BACNET_ZIGBEE_MPDU_MAX,
+    BACNET_BSC_MPDU_MAX
+);
 uint8_t _txBuffer[TX_BUFFER_SIZE] = {};
 
 
@@ -986,6 +995,7 @@ void BacnetRouterClass::sendRejectMessageToNetwork(
 }
 
 
+#if defined(BACDL_MULTIPLE)
 void BacnetRouterClass::datalinkSet(BacnetDatalink portType)
 {
     switch (portType){
@@ -1043,8 +1053,13 @@ void BacnetRouterClass::datalinkSet(BacnetDatalink portType)
         break;
     }
 }
+#else //BACDL_MULTIPLE
+void BacnetRouterClass::datalinkSet(BacnetDatalink portType)
+{}
+#endif //BACDL_MULTIPLE
 
 
+#if defined (ROUTER_DEVICE)
 bool BacnetRouterClass::handleLocalDevice(
     uint16_t snet,
     BACNET_ADDRESS &src,
@@ -1057,6 +1072,8 @@ bool BacnetRouterClass::handleLocalDevice(
     apdu_handler(&src, apdu, apduLen);
     return true;
 }
+#endif
+
 
 
 #if defined(ROUTER_DEVICE)

@@ -12,8 +12,8 @@
 - Make time set/get handling internal
 
 ### Fixed
-
-
+- Fix BACnet router configuration for single and multiple datalink builds.
+- Fix router buffer sizing and datalink selection when optional datalinks are disabled.
 
 ---
 

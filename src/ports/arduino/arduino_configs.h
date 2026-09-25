@@ -7,7 +7,7 @@
 //Define all needed for multimode!
 
 //Ethernet configuration
-#define BACDL_BIP //<--- Uncomment
+//#define BACDL_BIP //<--- Uncomment
 
 //MSTP configuration
 #define BACDL_MSTP //<--- Uncomment
@@ -25,7 +25,7 @@
 //#define BACDL_BSC //<--- Uncomment
 
 //Router configuration
-#define BACNET_ROUTER //<--- Uncomment
+//#define BACNET_ROUTER //<--- Uncomment
 
 #ifdef BACNET_ROUTER
 //Router device's configuration
@@ -106,7 +106,46 @@
 #define BACNET_ROUTER_BSC_PORTS 0
 #endif
 
-#ifdef BACNET_ROUTER
+
+#if defined(BACDL_BIP)
+#define BACNET_BIP_MPDU_MAX BIP_MPDU_MAX
+#else
+#define BACNET_BIP_MPDU_MAX 0
+#endif
+
+#if defined(BACDL_ARCNET)
+#define BACNET_ARCNET_MPDU_MAX ARCNET_MPDU_MAX
+#else
+#define BACNET_ARCNET_MPDU_MAX 0
+#endif
+
+#if defined(BACDL_BIP6)
+#define BACNET_BIP6_MPDU_MAX BIP6_MPDU_MAX
+#else
+#define BACNET_BIP6_MPDU_MAX 0
+#endif
+
+#if defined(BACDL_MSTP)
+#define BACNET_DLMSTP_MPDU_MAX DLMSTP_MPDU_MAX
+#else
+#define BACNET_DLMSTP_MPDU_MAX 0
+#endif
+
+//Stack do not provide default macro for those transport
+//User MUST define one if enabling those transports
+#if !defined(BACDL_ETHERNET)
+#define BACNET_ETHERNET_MPDU_MAX 0
+#endif
+
+#if !defined(BACDL_ZIGBEE)
+#define BACNET_ZIGBEE_MPDU_MAX 0
+#endif
+
+#if !defined(BACDL_BSC)
+#define BACNET_BSC_MPDU_MAX 0
+#endif
+
+
 #define BACNET_ROUTER_MAX_PORTS \
     (BACNET_ROUTER_BIP_PORTS + \
      BACNET_ROUTER_ETHERNET_PORTS + \
@@ -116,6 +155,5 @@
      BACNET_ROUTER_ZIGBEE_PORTS + \
      BACNET_ROUTER_BSC_PORTS)
 
-#endif //BACNET_ROUTER
 
 #endif // ARDUINO_BACNET_CONFIGS_H

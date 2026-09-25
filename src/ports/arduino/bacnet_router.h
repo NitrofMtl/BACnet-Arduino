@@ -33,6 +33,20 @@ enum class BacnetDatalink : uint8_t {
 #endif
 };
 
+
+template <typename T>
+constexpr T constexpr_max(T value)
+{
+    return value;
+}
+
+template <typename T, typename... Ts>
+constexpr T constexpr_max(T first, Ts... rest)
+{
+    T remaining = constexpr_max(rest...);
+    return first > remaining ? first : remaining;
+}
+
 struct RouterNetwork {
     BacnetDatalink port;
     uint16_t network;
