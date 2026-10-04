@@ -294,9 +294,17 @@ uint16_t dlmstp_receive(
         }
     }
     if (MSTP_Port->ReceivedValidFrame) {
-        //debug_print("ReceivedValidFrame");
+        //debug_printf("T ReceivedValidFrame uSec: %i", micros());
+        /*debug_printf(
+            "RX valid: state=%d type=%u src=%u dst=%u timer=%lu",
+            MSTP_Port->master_state,
+            MSTP_Port->FrameType,
+            MSTP_Port->SourceAddress,
+            MSTP_Port->DestinationAddress,
+            MSTP_Port->SilenceTimer);*/
         user->Statistics.receive_valid_frame_counter++;
         if (MSTP_Port->FrameType == FRAME_TYPE_POLL_FOR_MASTER) {
+            //debug_printf("FRAME_TYPE_POLL_FOR_MASTER");
             user->Statistics.poll_for_master_counter++;
         }
         if (user->Valid_Frame_Rx_Callback) {
@@ -334,7 +342,7 @@ uint16_t dlmstp_receive(
         }
     }
     if (MSTP_Port->receive_state == MSTP_RECEIVE_STATE_IDLE) {
-        //debug_print("step 4");
+        //debug_print("MSTP_RECEIVE_STATE_IDLE");
         /* only node state machines while rx is idle */
         if (MSTP_Port->SlaveNodeEnabled) {
             MSTP_Slave_Node_FSM(MSTP_Port);
@@ -346,7 +354,14 @@ uint16_t dlmstp_receive(
                 if (master_state != MSTP_Port->master_state) {
                     /* state changed while some states fast transition */
                     if (MSTP_Port->master_state == MSTP_MASTER_STATE_NO_TOKEN) {
-                        //debug_print("Lost token");
+                        debug_printf(
+                            "LOST TOKEN: state=%d timer=%lu events=%u retry=%u next=%u poll=%u",
+                            MSTP_Port->master_state,
+                            MSTP_Port->SilenceTimer((void *)MSTP_Port),
+                            MSTP_Port->EventCount,
+                            MSTP_Port->RetryCount,
+                            MSTP_Port->Next_Station,
+                            MSTP_Port->Poll_Station);
                         user->Statistics.lost_token_counter++;
                     }
                     master_state = MSTP_Port->master_state;

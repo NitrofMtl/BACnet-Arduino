@@ -78,6 +78,7 @@ void setupMSTP()
     mstp_baud_rate_set(BACNET_MSTP_BAUD);
 
     init_bacnet_mstp(UNIT_MAC);
+    mstp_nmax_master_set(2);
 }
 
 

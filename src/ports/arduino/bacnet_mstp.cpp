@@ -25,6 +25,8 @@
 #define MSTP_INPUT_BUF_SIZE 512 //could be 600
 #define MSTP_OUTPUT_BUF_SIZE 512 //could be 600
 
+#define MSTP_DEFAULT_NMAX_MASTER 127
+
 static uint8_t mstpInputBuffer[MSTP_INPUT_BUF_SIZE];
 static uint8_t mstpOutputBuffer[MSTP_OUTPUT_BUF_SIZE];
 
@@ -106,7 +108,7 @@ void init_bacnet_mstp(int8_t mac)
     mstp_port->OutputBuffer = mstpOutputBuffer;
     mstp_port->OutputBufferSize = MSTP_OUTPUT_BUF_SIZE;
 
-    mstp_port->Nmax_master = 1; //default
+    mstp_port->Nmax_master = MSTP_DEFAULT_NMAX_MASTER;
     mstp_port->Nmax_info_frames = 1;
 
     mstp_port->SlaveNodeEnabled = false;
@@ -138,6 +140,10 @@ void init_bacnet_mstp(int8_t mac)
 
 void mstp_nmax_master_set(uint8_t nmax_master)
 {
+    if (nmax_master > 127) {
+        nmax_master = 127;
+    }
+
     Mstp_port.Nmax_master = nmax_master;
 }
 

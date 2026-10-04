@@ -4,7 +4,7 @@
 ## [0.6.0] Unreleased
 
 ### Add
-- stm32RS485DMA support and example --->>> TO DO
+- STM32RS485DMA support and example
 
 
 ### Changed

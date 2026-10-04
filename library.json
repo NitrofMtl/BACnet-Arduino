@@ -1,7 +1,7 @@
 {
   "name": "BACnet-Arduino",
   "description": "Arduino BACnet library based on the open-source bacnet-stack project.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "authors": [
     {
       "name": "NitrofMtl",

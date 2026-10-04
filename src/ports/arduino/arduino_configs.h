@@ -10,7 +10,7 @@
 //#define BACDL_BIP //<--- Uncomment
 
 //MSTP configuration
-#define BACDL_MSTP //<--- Uncomment
+//#define BACDL_MSTP //<--- Uncomment
 
 //ARCNET configurations
 //#define BACDL_ARCNET //<--- Uncomment
@@ -29,7 +29,7 @@
 
 #ifdef BACNET_ROUTER
 //Router device's configuration
-#define ROUTER_DEVICE //<--- Uncomment
+//#define ROUTER_DEVICE //<--- Uncomment
 #endif
 
 // for confirmed messages, this is the number of transactions
