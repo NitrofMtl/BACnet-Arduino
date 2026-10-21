@@ -15,12 +15,11 @@
 #include <Arduino.h>
 
 //arduino libs
-#include <Ethernet.h>
-#include <EthernetUdp.h>
+//#include <Ethernet.h>
+//#include <EthernetUdp.h>
 #include <NTPClient.h>
 
 //ports lib
-#include "ports/arduino/bacnet_udp_port.h"
 #include "ports/arduino/bacnet_core.h"
 
 #define BACNET_PRIORITY_NORMAL 16

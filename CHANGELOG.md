@@ -1,15 +1,31 @@
 
 # Changelog
 
-## [0.6.0] Unreleased
+## [0.7.0]
 
 ### Add
-- STM32RS485DMA support and example
+- Added multi-port routing support for BACnet/IP and MS/TP, enabling a single router instance to connect multiple BACnet networks.
+
+### Changed
+`MS/TP`
+- Removed the unused `over_init` variable from `bacnet_mstp_init()`.
+- Restored the baud-rate-dependent calculation of `turnaround_ms` instead of the hardcoded value.
+
+- Remove fold expresssion from `constexpr_max`
+
+
+## [0.6.0]
+
+### Add
+- Added **experimental** STM32RS485DMA support and an example.
 
 
 ### Changed
 - restore schedule restoring to default 1 day scope
 - Make time set/get handling internal
+
+
+
 
 ### Fixed
 - Fix BACnet router configuration for single and multiple datalink builds.
@@ -17,7 +33,7 @@
 
 ---
 
-## [0.5.0] Unreleased
+## [0.5.0]
 
 ### Add
 - Datalink BACnetRouter with local device support

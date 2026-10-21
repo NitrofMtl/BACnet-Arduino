@@ -27,14 +27,6 @@
 
 #define MSTP_DEFAULT_NMAX_MASTER 127
 
-static uint8_t mstpInputBuffer[MSTP_INPUT_BUF_SIZE];
-static uint8_t mstpOutputBuffer[MSTP_OUTPUT_BUF_SIZE];
-
-static dlmstp_rs485_driver mstp_driver = {};
-static dlmstp_user_data_t user_data = {};
-static mstp_port_struct_t Mstp_port = {};
-
-
 void Sprintf(const char *format, ...)
 {
     char buffer[256];
@@ -47,65 +39,110 @@ void Sprintf(const char *format, ...)
 }
 
 
-void mstp_callback_send_set(void (*cb)(const uint8_t *p, uint16_t len))
+struct MSTP_Instance {
+    uint8_t inputBuffer[MSTP_INPUT_BUF_SIZE] {};
+    uint8_t outputBuffer[MSTP_OUTPUT_BUF_SIZE] {};
+
+    dlmstp_rs485_driver mstp_driver = {};
+    dlmstp_user_data_t user_data = {};
+    mstp_port_struct_t Mstp_port = {};
+
+    uint32_t baudRate = 0;
+    uint32_t silence_reference = 0;
+};
+static MSTP_Instance mstpInstances[BACNET_ROUTER_MSTP_PORTS_COUNT];
+
+
+void mstp_callback_send_set(void (*cb)(const uint8_t *p, uint16_t len), uint8_t index)
 {
-    mstp_driver.send = cb;
+    mstpInstances[index].mstp_driver.send = cb;
 }
 
 
-void mstp_callback_read_set(bool (*cb)(uint8_t *b))
+void mstp_callback_read_set(bool (*cb)(uint8_t *b), uint8_t index)
 {
-    mstp_driver.read = cb;
+    mstpInstances[index].mstp_driver.read = cb;
 }
 
 
-void mstp_callback_transmitting_set(bool (*cb)())
+void mstp_callback_transmitting_set(bool (*cb)(), uint8_t index)
 {
-    mstp_driver.transmitting = cb;
+    mstpInstances[index].mstp_driver.transmitting = cb;
 }
 
-static uint32_t silence_reference = 0;
+
+uint8_t mstp_ActiveInstanceIndexGet()
+{
+    // get the active interface
+    mstp_port_struct_t *active_port = (struct mstp_port_struct_t *)dlmstp_get_interface(); 
+
+    for (uint8_t i = 0; i < BACNET_ROUTER_MSTP_PORTS_COUNT; i++) {
+        if (&mstpInstances[i].Mstp_port == active_port) {
+            return i;
+        }
+    }
+    return 0; // default to first instance if not found
+}
+
+
+void mstp_ActiveInstanceIndexSet(uint8_t index)
+{
+    if (index >= BACNET_ROUTER_MSTP_PORTS_COUNT) {
+        return;
+    }
+
+    dlmstp_set_interface(
+        reinterpret_cast<const char *>(&mstpInstances[index].Mstp_port));
+}
+
 
 static uint32_t mstp_silence_timer()
 {
-    return millis() - silence_reference;
+    uint8_t index = mstp_ActiveInstanceIndexGet();
+    return millis() - mstpInstances[index].silence_reference;
 }
 
 
 void mstp_silence_reset()
 {
-    silence_reference = millis();
+    uint8_t index = mstp_ActiveInstanceIndexGet();
+    mstpInstances[index].silence_reference = millis();
 }
-
-
-static uint32_t mstp_baud = 0;
 
 
 static uint32_t mstp_baud_rate()
 {
-    return mstp_baud; // your fixed baud
+    uint8_t index = mstp_ActiveInstanceIndexGet();
+    return mstpInstances[index].baudRate;
 }
 
 bool mstp_baud_rate_set(uint32_t baud)
 {
-    mstp_baud = baud;
+    uint8_t index = mstp_ActiveInstanceIndexGet();
+    mstpInstances[index].baudRate = baud;
     return true;
 }
 
+
+bool mstp_baud_rate_set(uint32_t baud, uint8_t index)
+{
+    mstpInstances[index].baudRate = baud;
+    return true;
+}
+
+
 static void mstp_init(){}
 
-void init_bacnet_mstp(int8_t mac)
-{
-    //need to select datalink only in BACDL_MULTIPLE
-    //datalink_set((char*)"mstp");  //Select MS/TP as datalink
 
-    mstp_port_struct_t *mstp_port = &Mstp_port;
+void init_bacnet_mstp(int8_t mac, uint8_t index)
+{
+    mstp_port_struct_t *mstp_port = &mstpInstances[index].Mstp_port;
     mstp_port->This_Station = mac;
 
-    mstp_port->InputBuffer = mstpInputBuffer;
+    mstp_port->InputBuffer = mstpInstances[index].inputBuffer;
     mstp_port->InputBufferSize = MSTP_INPUT_BUF_SIZE;
 
-    mstp_port->OutputBuffer = mstpOutputBuffer;
+    mstp_port->OutputBuffer = mstpInstances[index].outputBuffer;
     mstp_port->OutputBufferSize = MSTP_OUTPUT_BUF_SIZE;
 
     mstp_port->Nmax_master = MSTP_DEFAULT_NMAX_MASTER;
@@ -113,38 +150,41 @@ void init_bacnet_mstp(int8_t mac)
 
     mstp_port->SlaveNodeEnabled = false;
 
-    mstp_driver.init = mstp_init;
-    mstp_driver.silence_milliseconds = mstp_silence_timer;
-    mstp_driver.silence_reset = mstp_silence_reset;
-    mstp_driver.baud_rate = mstp_baud_rate;
-    mstp_driver.baud_rate_set =  mstp_baud_rate_set;
+    dlmstp_rs485_driver *driver = &mstpInstances[index].mstp_driver;
+    driver->init = mstp_init;
+    driver->silence_milliseconds = mstp_silence_timer;
+    driver->silence_reset = mstp_silence_reset;
+    driver->baud_rate = mstp_baud_rate;
+    driver->baud_rate_set =  mstp_baud_rate_set;
     
-    user_data.RS485_Driver = &mstp_driver;
-    mstp_port->UserData = &user_data;
-    user_data.Initialized = true;
+    dlmstp_user_data_t *user_data = &mstpInstances[index].user_data;
+    user_data->RS485_Driver = driver;
+    mstp_port->UserData = user_data;
 
     mstp_port->ZeroConfigEnabled = true;
     /* use the libc srand() and rand() generated random number*/
     MSTP_Zero_Config_UUID_Init(mstp_port);
    
-    dlmstp_set_interface((const char *)mstp_port);
+    dlmstp_set_interface(reinterpret_cast<const char *>(mstp_port));
     dlmstp_user_data_t *u = (dlmstp_user_data_t *)mstp_port->UserData;
     u->Initialized = false;
     
-    dlmstp_init((char*)mstp_port);
+    if (!dlmstp_init(reinterpret_cast<char *>(mstp_port))) {
+        Serial.println("[ERROR] Failed to initialize MSTP port");
+    }
 
-    uint32_t turnaround_ms = 2;//(40UL * 1000UL + mstp_baud_rate() - 1) / mstp_baud_rate();
+    uint32_t turnaround_ms = (40UL * 1000UL + mstp_baud_rate() - 1) / mstp_baud_rate();
     mstp_port->Tturnaround_timeout = turnaround_ms;
 }
 
 
-void mstp_nmax_master_set(uint8_t nmax_master)
+void mstp_nmax_master_set(uint8_t nmax_master, uint8_t index)
 {
     if (nmax_master > 127) {
         nmax_master = 127;
     }
 
-    Mstp_port.Nmax_master = nmax_master;
+    mstpInstances[index].Mstp_port.Nmax_master = nmax_master;
 }
 
 
@@ -168,5 +208,4 @@ void bacnet_Poll_mstp()
     bacnet_handle_reinitialize();
     BACnetSchedule::handler();
 }
-
 

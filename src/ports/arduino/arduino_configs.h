@@ -3,11 +3,10 @@
 
 #include "bacnet/bacdef.h"
 
-
 //Define all needed for multimode!
 
 //Ethernet configuration
-//#define BACDL_BIP //<--- Uncomment
+#define BACDL_BIP //<--- Uncomment
 
 //MSTP configuration
 //#define BACDL_MSTP //<--- Uncomment
@@ -25,11 +24,11 @@
 //#define BACDL_BSC //<--- Uncomment
 
 //Router configuration
-//#define BACNET_ROUTER //<--- Uncomment
+#define BACNET_ROUTER //<--- Uncomment
 
 #ifdef BACNET_ROUTER
 //Router device's configuration
-//#define ROUTER_DEVICE //<--- Uncomment
+#define ROUTER_DEVICE //<--- Uncomment
 #endif
 
 // for confirmed messages, this is the number of transactions
@@ -59,51 +58,51 @@
 
 #if defined(BACDL_BIP) &&  defined(BACNET_ROUTER)
 #define BACNET_ROUTER_BIP
-#define BACNET_ROUTER_BIP_PORTS 1
+#define BACNET_ROUTER_BIP_PORTS_COUNT 2
 #else
-#define BACNET_ROUTER_BIP_PORTS 0
+#define BACNET_ROUTER_BIP_PORTS_COUNT 0
 #endif
 
 #if defined(BACDL_ETHERNET) &&  defined(BACNET_ROUTER)
 #define BACNET_ROUTER_ETHERNET
-#define BACNET_ROUTER_ETHERNET_PORTS 1
+#define BACNET_ROUTER_ETHERNET_PORTS_COUNT 1
 #else
-#define BACNET_ROUTER_ETHERNET_PORTS 0
+#define BACNET_ROUTER_ETHERNET_PORTS_COUNT 0
 #endif
 
 #if defined(BACDL_ARCNET) &&  defined(BACNET_ROUTER)
 #define BACNET_ROUTER_ARCNET
-#define BACNET_ROUTER_ARCNET_PORTS 1
+#define BACNET_ROUTER_ARCNET_PORTS_COUNT 1
 #else
-#define BACNET_ROUTER_ARCNET_PORTS 0
+#define BACNET_ROUTER_ARCNET_PORTS_COUNT 0
 #endif
 
 #if defined(BACDL_BIP6) &&  defined(BACNET_ROUTER)
 #define BACNET_ROUTER_BIP6
-#define BACNET_ROUTER_BIP6_PORTS 1
+#define BACNET_ROUTER_BIP6_PORTS_COUNT 2
 #else
-#define BACNET_ROUTER_BIP6_PORTS 0
+#define BACNET_ROUTER_BIP6_PORTS_COUNT 0
 #endif
 
 #if defined(BACDL_MSTP) &&  defined(BACNET_ROUTER)
 #define BACNET_ROUTER_MSTP
-#define BACNET_ROUTER_MSTP_PORTS 1
+#define BACNET_ROUTER_MSTP_PORTS_COUNT 1
 #else
-#define BACNET_ROUTER_MSTP_PORTS 0
+#define BACNET_ROUTER_MSTP_PORTS_COUNT 0
 #endif
 
 #if defined(BACDL_ZIGBEE) &&  defined(BACNET_ROUTER)
 #define BACNET_ROUTER_ZIGBEE
-#define BACNET_ROUTER_ZIGBEE_PORTS 1
+#define BACNET_ROUTER_ZIGBEE_PORTS_COUNT 1
 #else
-#define BACNET_ROUTER_ZIGBEE_PORTS 0
+#define BACNET_ROUTER_ZIGBEE_PORTS_COUNT 0
 #endif
 
 #if defined(BACDL_BSC) &&  defined(BACNET_ROUTER)
 #define BACNET_ROUTER_BSC
-#define BACNET_ROUTER_BSC_PORTS 1
+#define BACNET_ROUTER_BSC_PORTS_COUNT 1
 #else
-#define BACNET_ROUTER_BSC_PORTS 0
+#define BACNET_ROUTER_BSC_PORTS_COUNT 0
 #endif
 
 
@@ -147,13 +146,13 @@
 
 
 #define BACNET_ROUTER_MAX_PORTS \
-    (BACNET_ROUTER_BIP_PORTS + \
-     BACNET_ROUTER_ETHERNET_PORTS + \
-     BACNET_ROUTER_ARCNET_PORTS + \
-     BACNET_ROUTER_BIP6_PORTS + \
-     BACNET_ROUTER_MSTP_PORTS + \
-     BACNET_ROUTER_ZIGBEE_PORTS + \
-     BACNET_ROUTER_BSC_PORTS)
+    (BACNET_ROUTER_BIP_PORTS_COUNT + \
+     BACNET_ROUTER_ETHERNET_PORTS_COUNT + \
+     BACNET_ROUTER_ARCNET_PORTS_COUNT + \
+     BACNET_ROUTER_BIP6_PORTS_COUNT + \
+     BACNET_ROUTER_MSTP_PORTS_COUNT + \
+     BACNET_ROUTER_ZIGBEE_PORTS_COUNT + \
+     BACNET_ROUTER_BSC_PORTS_COUNT)
 
 
 #endif // ARDUINO_BACNET_CONFIGS_H
