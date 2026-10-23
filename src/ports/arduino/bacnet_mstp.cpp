@@ -208,4 +208,3 @@ void bacnet_Poll_mstp()
     bacnet_handle_reinitialize();
     BACnetSchedule::handler();
 }
-

@@ -102,19 +102,6 @@ void BacnetRouterClass::poll()
 }
 
 
-bool BacnetRouterClass::attachRouterDevice(uint16_t net) {
-    RouterPort* devicePort = findPort(net);
-    if (!devicePort) return false;
-    for (uint8_t i = 0; i < _portsCount; i++) {
-        if (_ports[i] == devicePort) {
-            _routerDevice.portIndex = i;
-            return true;
-        }
-    }
-    return false;
-}
-
-
 RouterPort *BacnetRouterClass::findPort(uint16_t network)
 {
     for (uint8_t i = 0; i < _portsCount; i++) {
@@ -275,11 +262,8 @@ bool BacnetRouterClass::routeBroadcastApdu(
         RouterPort &port = *_ports[i];
         if (port.net == snet) {
 #if defined (ROUTER_DEVICE)
-            //Broadcast for local device
-            if (_routerDevice.portIndex < _portsCount) {
-                port.activeDatalinkSet();
-                apdu_handler(&src, apdu, apduLen);
-            }
+            port.activeDatalinkSet();
+            apdu_handler(&src, apdu, apduLen);
 #endif //ROUTER_DEVICE
             continue;
         }

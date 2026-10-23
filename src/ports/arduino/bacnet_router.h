@@ -57,10 +57,6 @@ class BacnetRouterClass {
         RouterPort *port;
         uint16_t net;
     };
-    struct RouterDevice {
-    int8_t portIndex = NO_ROUTER_DEVICE;
-    };
-    bool attachRouterDevice(uint16_t net);
     int8_t getPortIndex(uint16_t network);
 
     private:
@@ -190,7 +186,6 @@ class BacnetRouterClass {
     RouterRoute _routes[BACNET_ROUTER_MAX_ROUTES] {};
     uint16_t _routesCount = 0;
     uint8_t _portsCount = 0;
-    RouterDevice _routerDevice {};
 
 
     // router ports/table
@@ -200,3 +195,6 @@ class BacnetRouterClass {
 void printBacnetAddress(char* tag, const BACNET_ADDRESS &addr);
 
 
+#if defined (BACNET_ROUTER)
+#include "bacnet_mstp_router_impl.h"
+#endif

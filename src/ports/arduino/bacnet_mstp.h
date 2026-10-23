@@ -44,14 +44,11 @@ class MSTP_port : public RouterPort {
     {
         return *activeInstance;
     }
-    bool registerPeripheral(BacnetRouterClass* router, Peripheral *peripheral)
-    {
-        uint8_t portIndex = router->getPortIndex(net);
-        if (!peripheral || portIndex >= BACNET_ROUTER_MSTP_PORTS_COUNT || portIndex < 0)
-            return false;
-
-        instances[portIndex] = peripheral;
-        return true;
+    bool registerPeripheral(BacnetRouterClass* router, Peripheral *peripheral);
+    bool isActive() {
+        uint8_t index = mstp_ActiveInstanceIndexGet();
+        if (instances[index] && instances[index] == activeInstance) return true;
+        return false;
     }
     private:
     static Peripheral *instances[BACNET_ROUTER_MSTP_PORTS_COUNT];

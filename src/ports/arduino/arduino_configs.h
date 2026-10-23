@@ -9,7 +9,7 @@
 #define BACDL_BIP //<--- Uncomment
 
 //MSTP configuration
-//#define BACDL_MSTP //<--- Uncomment
+#define BACDL_MSTP //<--- Uncomment
 
 //ARCNET configurations
 //#define BACDL_ARCNET //<--- Uncomment
@@ -45,7 +45,7 @@
 //4	Fine if you have little simultaneous client activity
 //2	Possible for a very constrained device
 //1	Minimum practical value
-#define MAX_TSM_TRANSACTIONS 31
+#define MAX_TSM_TRANSACTIONS 15//31
 
 #define MAX_ADDRESS_CACHE 63
 
