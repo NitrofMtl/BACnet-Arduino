@@ -50,6 +50,8 @@ class MSTP_port : public RouterPort {
         if (instances[index] && instances[index] == activeInstance) return true;
         return false;
     }
+    uint8_t instanceIndexGet() { return portIndex; }
+    bool isReady() { return portIndex != 255; }
     private:
     static Peripheral *instances[BACNET_ROUTER_MSTP_PORTS_COUNT];
     static Peripheral *activeInstance;
