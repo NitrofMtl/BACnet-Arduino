@@ -41,7 +41,6 @@ class RouterPort {
     BacnetDatalink portType;
     
     protected:
-    int8_t portIndex = -1;
     virtual void activePeripheralSet() {};
     
     

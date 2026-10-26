@@ -3,18 +3,19 @@
 
 BIP_PeripheralBase* BIP_Port::_activePeripheral = nullptr;
 
-bool  BIP_Port::registerPeripheral(BacnetRouterClass*, BIP_PeripheralBase* peripheral)
+
+BIP_Port::BIP_Port(BacnetDatalink portType, uint16_t net, BIP_PeripheralBase* peripheral)
+: RouterPort(portType, net)
 {
-    if (!peripheral) return false;
+    if (!peripheral) return;
     _peripheral = peripheral;
     _activePeripheral = peripheral; //ensure active peripherial valid.
-    return true;
 }
 
 
 void BIP_Port::activePeripheralSet()
 {
-        _activePeripheral = _peripheral;
+    _activePeripheral = _peripheral;
 }
 
 

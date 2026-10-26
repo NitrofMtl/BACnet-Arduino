@@ -41,26 +41,20 @@ uint8_t _txBuffer[TX_BUFFER_SIZE] = {};
 
 bool BacnetRouterClass::addPort(RouterPort *port)
 {
-    uint8_t _peripheralCount = 0;
     int8_t slot = -1;
     for (uint8_t i = 0; i < BACNET_ROUTER_MAX_PORTS; i++) {
         if (_ports[i] != nullptr) {
             if (_ports[i]->net == port->net) return false;
-            if (_ports[i]->portType == port->portType) {  
-                _peripheralCount++;
-            }
         } else {
             slot = i;
             break;
         }
-        
     }
 
     if (slot == -1) return false; // no available slot
 
     _ports[slot] = port;
     _portsCount++;
-    port->portIndex = _peripheralCount;
     port->activeDatalinkSet();
 
     return true;
@@ -985,13 +979,4 @@ bool BacnetRouterClass::isRouterDevice(RouterPort *port, BACNET_ADDRESS routeDes
 }
 #endif
 
-
-int8_t BacnetRouterClass::getPortIndex(uint16_t network)
-{
-    for (uint8_t i = 0; i < _portsCount; i++) {
-        if (_ports[i]->net == network)
-            return _ports[i]->portIndex;
-    }
-    return -1;
-}
 

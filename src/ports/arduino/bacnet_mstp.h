@@ -36,29 +36,39 @@ void mstp_ActiveInstanceIndexSet(uint8_t index);
 template <class Peripheral>
 class MSTP_port : public RouterPort {
     public:
-    MSTP_port(BacnetDatalink datalink, uint16_t network)
+    MSTP_port(BacnetDatalink datalink, uint16_t network, Peripheral *peripheral)
     : RouterPort(datalink, network)
     {
+        if (!peripheral) return;
+
+        for (uint8_t i = 0; i < BACNET_MSTP_PORTS_COUNT; i++) {
+            if (instances[i] == nullptr) {
+                
+                _portIndex = i;
+                instances[_portIndex] = peripheral;
+                break;
+            }
+        }
     }
     Peripheral& active()
     {
         return *activeInstance;
     }
-    bool registerPeripheral(BacnetRouterClass* router, Peripheral *peripheral);
     bool isActive() {
         uint8_t index = mstp_ActiveInstanceIndexGet();
         if (instances[index] && instances[index] == activeInstance) return true;
         return false;
     }
-    uint8_t instanceIndexGet() { return portIndex; }
-    bool isReady() { return portIndex != 255; }
+    uint8_t instanceIndexGet() { return _portIndex; }
+    bool isReady() { return _portIndex != 255; }
     private:
+    uint8_t _portIndex = 255;
     static Peripheral *instances[BACNET_ROUTER_MSTP_PORTS_COUNT];
     static Peripheral *activeInstance;
     void activePeripheralSet() override {
-        if (portIndex < BACNET_ROUTER_MSTP_PORTS_COUNT && instances[portIndex]) {
-            mstp_ActiveInstanceIndexSet(portIndex);
-            activeInstance = instances[portIndex];
+        if (_portIndex < BACNET_ROUTER_MSTP_PORTS_COUNT && instances[_portIndex]) {
+            mstp_ActiveInstanceIndexSet(_portIndex);
+            activeInstance = instances[_portIndex];
         }
     } 
 };

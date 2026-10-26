@@ -57,7 +57,6 @@ class BacnetRouterClass {
         RouterPort *port;
         uint16_t net;
     };
-    int8_t getPortIndex(uint16_t network);
 
     private:
      bool addPort(RouterPort *port);
@@ -194,7 +193,3 @@ class BacnetRouterClass {
 
 void printBacnetAddress(char* tag, const BACNET_ADDRESS &addr);
 
-
-#if defined (BACNET_ROUTER)
-#include "bacnet_mstp_router_impl.h"
-#endif

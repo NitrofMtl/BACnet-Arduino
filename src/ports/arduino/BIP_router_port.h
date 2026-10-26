@@ -73,7 +73,7 @@ class BIP_Peripheral : public BIP_PeripheralBase
 class BIP_Port : public RouterPort
 {
 public:
-    using RouterPort::RouterPort;
+    BIP_Port(BacnetDatalink portType, uint16_t net, BIP_PeripheralBase* peripheral);
 
     bool registerPeripheral(BacnetRouterClass*, BIP_PeripheralBase* peripheral);
     static BIP_PeripheralBase& active();

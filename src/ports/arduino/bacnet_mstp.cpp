@@ -87,7 +87,7 @@ uint8_t mstp_ActiveInstanceIndexGet()
 
 void mstp_ActiveInstanceIndexSet(uint8_t index)
 {
-    if (index >= BACNET_ROUTER_MSTP_PORTS_COUNT) {
+    if (index >= BACNET_MSTP_PORTS_COUNT) {
         return;
     }
 
