@@ -1,3 +1,20 @@
+/*
+## BACnet MS/TP Example
+
+**Board:** Arduino Opta (STM32H747)
+
+This example demonstrates a BACnet MS/TP device using the BACnet-Arduino library.
+
+It configures the RS-485 interface and BACnet MS/TP data link, then initializes a BACnet device.
+The device communicates over the MS/TP network using its configured MAC address and baud rate.
+
+**Dependencies / Notes:**
+- Requires an RS-485 interface supported by the ArduinoRS485 library.
+- Configure the MS/TP MAC address and baud rate to match the network.
+- Enable `BACDL_MSTP` in `arduino_configs.h`.
+- This example is intended for standalone MS/TP operation, not router mode.
+*/
+
 #include <Arduino.h>
 #include "ArduinoRS485.h"
 
@@ -5,8 +22,18 @@
 #include <mbed_rtc_time.h>
 
 //BACnet MS/TP
-#include "ports/arduino/bacnet_mstp.h"
+#include "BACnet-Arduino_MSTP.h"
 
+// Verify that the shared configuration is compatible with this example.
+#if !defined(BACDL_MSTP)
+#error "This example requires MSTP datalink to be enable in arduino_configs.h"
+#endif
+#if defined(BACDL_MULTIPLE)
+#error "This example requires only MSTP as datalink to be enable in arduino_configs.h"
+#endif
+#if defined(BACNET_ROUTER)
+#error "This example requires BACNET_ROUTER to be disabled in arduino_configs.h"
+#endif
 
 #define DE_PIN RS485_DEFAULT_DE_PIN
 #define UNIT_MAC 1
@@ -65,12 +92,6 @@ void setupMSTP()
 {
     bacnet_init(&deviceInfos);
     setTimeCallback_set(set_time);
-    
-    // BACnet reads the current board time through this callback.
-    bacnet_time_callback_set(bacnet_get_time);//set time from ntp
-
-    // Allow BACnet Time Synchronization requests to update the board clock.
-    handler_timesync_set_callback_set(bacnet_sync_time);//allow bacnet time sync requests to set time
 
     mstp_callback_read_set(rs485_read);
     mstp_callback_send_set(rs485_send);
@@ -87,7 +108,6 @@ void setup() {
 
     RS485.begin(BACNET_MSTP_BAUD);
     RS485.setDelays(RS485_PREDELAY, RS485_POSTDELAY);
-
     RS485.receive();
 
     delay(1000);
@@ -115,3 +135,4 @@ void loop() {
     
     bacnet_Poll_mstp();
 }
+

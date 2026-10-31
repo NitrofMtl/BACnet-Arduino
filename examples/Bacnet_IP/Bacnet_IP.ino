@@ -1,3 +1,60 @@
+/*
+ * Basic BACnet/IP Device Example
+ *
+ * Board: Arduino Opta (STM32H747)
+ *
+ * Description:
+ * Demonstrates a basic BACnet device using BACnet/IP over Ethernet.
+ * The example initializes the network, synchronizes the board clock
+ * using NTP, and exposes several BACnet objects for testing with a
+ * BACnet client such as YABE.
+ *
+ * BACnet Objects:
+ * - Analog Value: Simulated temperature value, updated periodically
+ * - Analog Input: Reads the Opta analog input A0
+ * - Binary Input: Reflects the physical user button
+ * - Binary Value: Example binary value
+ * - Analog Output: Example analog output
+ * - Binary Output: Example binary output
+ * - Multi-State Input: Fan speed
+ * - Multi-State Output: Fan mode
+ * - Multi-State Value: Fan status
+ *
+ * Additional Features:
+ * - BACnet Device Communication Control (DCC) password
+ * - Device reinitialization password and cold-start callback
+ * - COV testing through periodic Analog Value updates
+ * - Weekly schedule support with persistent storage
+ * - Board clock synchronization using NTP
+ *
+ * Network Configuration:
+ * - BACnet/IP UDP port: 47808 (BAC0)
+ * - Static IP address: 192.168.0.150
+ *
+ * Dependencies:
+ * - BACnet-Arduino
+ * - Ethernet
+ * - NTPClient
+ * - Opta KVStore persistent storage API
+ *
+ * Notes:
+ * - Configure the network settings for your local network.
+ * - Schedule persistence callbacks must be registered before
+ *   BACnetSchedule::begin().
+ * - The test schedule is created only when setupSchedule() is called.
+ * - The cold-start callback uses NVIC_SystemReset(), which is specific
+ *   to supported STM32 boards and should be adapted for other platforms.
+ * - Change the example passwords before using this device in a real
+ *   installation.
+ * 
+ * * Configuration:
+ * - No changes to arduino_configs.h are required.
+ * - BACnet/IP (BIP) is enabled by default when no data link
+ *   is explicitly selected.
+ * - You still can explicitly enable it.
+ */
+
+
 #include <Arduino.h>
 
 // Arduino networking and time libraries
@@ -14,12 +71,25 @@
 // BACnet-Arduino Arduino port
 #include "BACnet-Arduino.h"
 
+// Verify that the shared configuration is compatible with this example.
+#if !defined(BACDL_BIP)
+#error "This example requires BIP datalink to be enable in arduino_configs.h"
+#endif
+#if defined(BACDL_MULTIPLE)
+#error "This example requires only BIP as datalink to be enable in arduino_configs.h"
+#endif
+#if defined(BACNET_ROUTER)
+#error "This example requires BACNET_ROUTER to be disabled in arduino_configs.h"
+#endif
 // ----------------------------------------------------------------------------- 
 // Network configuration 
 // -----------------------------------------------------------------------------
 constexpr uint8_t deviceIp[] = { 192, 168, 0, 150 };
 constexpr uint16_t bacnetUdpPort = 47808; // BAC0
 
+// ----------------------------------------------------------------------------- 
+// BACnet configuration 
+// -----------------------------------------------------------------------------
 const deviceInfos_t deviceInfos {
     2,  //Instance_number
     "My Opta", //Name
@@ -31,9 +101,6 @@ const deviceInfos_t deviceInfos {
     "0.1" //Application software version
 };
 
-// ----------------------------------------------------------------------------- 
-// BACnet configuration 
-// -----------------------------------------------------------------------------
 #define TIME_UTC_OFF_ESTERN_ADVANCE -4
 #define DCC_PASSWORD "1234"
 #define REINIT_PASSWORD "4321"
@@ -50,24 +117,22 @@ const deviceInfos_t deviceInfos {
 #define MSO_FAN_MODE 0
 #define MSV_FAN_STATUS 0
 
+BACnetSchedule mainSchedule(0);
 // -----------------------------------------------------------------------------
-// Global objects
+// BIP Network
 // -----------------------------------------------------------------------------
 EthernetUDP Udp;
+BIP_Peripheral<arduino::EthernetClass, EthernetUDP> BIP_Periph(&Ethernet, &Udp, bacnetUdpPort);
 
 // NTP is used only to initialize/synchronize the board clock. 
 // BACnet subsequently uses the board clock through bacnet_get_time().
 NTPClient timeClient(Udp, "pool.ntp.org", TIME_UTC_OFF_ESTERN_ADVANCE * 3600, 0);
 
-BACnetSchedule mainSchedule(0);
-
 // ----------------------------------------------------------------------------- 
 // Forward declarations
 // -----------------------------------------------------------------------------
 void setupNetwork();
-
 void setupBacnet();
-
 void reinitColdStartCb();
 void setupSchedule();
 bool restoreSchedule(uint32_t inst, BACnetSchedule::SchedulePersistentData *data);
@@ -80,13 +145,11 @@ void setupNetwork()
 {
     Ethernet.begin(deviceIp);
     Udp.begin(bacnetUdpPort);
-    bacnet_set_udp(&Udp, bacnetUdpPort);
     timeClient.begin();
     timeClient.update();
     const unsigned long epoch = timeClient.getEpochTime();
     set_time(epoch);
 }
-
 
 // ----------------------------------------------------------------------------- 
 // BACnet initialization 
@@ -95,6 +158,7 @@ void setupNetwork()
 // Configure the BACnet device, callbacks and example objects.
 void setupBacnet()
 {
+    BIP_Periph.begin();
     bacnet_init(&deviceInfos);
     setTimeCallback_set(set_time);
 
@@ -134,7 +198,6 @@ void setupBacnet()
     BACnetSchedule::setSaveCallback(saveSchedule);
     
     BACnetSchedule::begin();
- 
 
     Serial.print("Temperature");
     Serial.println(Analog_Value_Present_Value(AV_0));
@@ -283,4 +346,3 @@ void saveSchedule(uint32_t inst, const BACnetSchedule::SchedulePersistentData &d
 
     kv_set(key, &data, sizeof(data), 0);
 }
-

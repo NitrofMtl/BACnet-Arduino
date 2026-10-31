@@ -1,7 +1,6 @@
 #include "ports/arduino/bacnet_core.h"
 
 #include "bacnet/basic/object/device.h"
-#include "ports/arduino/bacnet_udp_port.h"
 #include "bacnet/datalink/bip.h"
 #include "bacnet/basic/npdu/h_npdu.h"
 #include "bacnet/basic/service/h_apdu.h"

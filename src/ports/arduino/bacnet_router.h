@@ -3,35 +3,15 @@
 
 #include "ports/arduino/bacnet.h"
 #include "ports/arduino/bacnet_mstp.h"
+#include "ports/arduino/bacnet_peripheral.h"
+#include "BIP_router_port.h"
 
 #define NO_ROUTER_DEVICE 0xFFu
 
 #define BACNET_ROUTER_MAX_ROUTES 128
 
 
-enum class BacnetDatalink : uint8_t {
-#ifdef BACNET_ROUTER_BIP
-    BIP,
-#endif 
-#ifdef BACNET_ROUTER_ETHERNET
-    ETHERNET,
-#endif
-#ifdef BACNET_ROUTER_ARCNET
-    ARCNET,
-#endif
-#ifdef BACDL_BIP6
-    BIP6,
-#endif
-#ifdef BACNET_ROUTER_MSTP
-    MSTP,
-#endif
-#ifdef BACDL_ZIGBEE
-    ZIGBEE,
-#endif
-#ifdef BACNET_ROUTER_BSC
-    BSC,
-#endif
-};
+
 
 
 template <typename T>
@@ -43,8 +23,11 @@ constexpr T constexpr_max(T value)
 template <typename T, typename... Ts>
 constexpr T constexpr_max(T first, Ts... rest)
 {
-    T remaining = constexpr_max(rest...);
-    return first > remaining ? first : remaining;
+    //T remaining = constexpr_max(rest...);
+    //return first > remaining ? first : remaining;
+    return first > constexpr_max(rest...)
+        ? first
+        : constexpr_max(rest...);
 }
 
 struct RouterNetwork {
@@ -54,56 +37,39 @@ struct RouterNetwork {
 
 class BacnetRouterClass {
     public:
-    BacnetRouterClass()
-    {  
-    }
+    BacnetRouterClass() {}
 
-    template <typename... RouterNetworks>
-    void begin(RouterNetworks... networks)
+    template <typename First, typename Second, typename... Rest>
+    bool begin(First *firstPort, Second *secondPort, Rest*... restPorts)
     {
-        addPorts(networks...);
+        if (!addPort(firstPort))
+            return false;
+
+        return begin(secondPort, restPorts...);
     }
-
+    bool begin(RouterPort *port)
+    {
+        return addPort(port);
+    }
     void poll();
-
-    struct RouterPort {
-        BACNET_ADDRESS address;
-        uint16_t net;
-        BacnetDatalink portType;
-    };
     struct RouterRoute {
         BACNET_ADDRESS address;
         RouterPort *port;
         uint16_t net;
     };
-    struct RouterDevice {
-    int8_t portIndex = NO_ROUTER_DEVICE;
-    };
-    bool attachRouterDevice(BacnetDatalink portType);
-    
+
     private:
-    template <typename... RouterNetworks>
-    bool addPorts(RouterNetwork firstNetwork, RouterNetworks... restNetworks)
-    {
-        if (!addPort(firstNetwork.port, firstNetwork.network))
-            return false;
-        return addPorts(restNetworks...);
-    }
-    bool addPorts(RouterNetwork network) { 
-        return addPort(network.port, network.network);
-    } // Base case for recursion
-    bool addPort(BacnetDatalink portType, uint16_t network);
-    
+     bool addPort(RouterPort *port);
     RouterPort *findPort(uint16_t network);
     int sendPdu(
-        const RouterPort &port,
+        RouterPort &port,
         BACNET_ADDRESS &dest,
         BACNET_NPDU_DATA &npdu,
         uint8_t *pdu,
         uint16_t pduLen
     );
     BACNET_ADDRESS getBroadcastAddress() const;
-        int encodeRoutedPdu(
+    int encodeRoutedPdu(
         uint8_t *pdu,
         BACNET_ADDRESS &dest,
         BACNET_ADDRESS &src,
@@ -205,7 +171,6 @@ class BacnetRouterClass {
         uint8_t rejectReason,
         uint16_t dnet
     );
-    void datalinkSet(BacnetDatalink portType);
 #if defined(ROUTER_DEVICE)
     bool isRouterDevice(RouterPort *port, BACNET_ADDRESS routeDest);
     bool handleLocalDevice(
@@ -216,14 +181,15 @@ class BacnetRouterClass {
     );
 #endif
 
-    RouterPort _ports[BACNET_ROUTER_MAX_PORTS] = {};
-    RouterRoute _routes[BACNET_ROUTER_MAX_ROUTES];
+    RouterPort *_ports[BACNET_ROUTER_MAX_PORTS] = {};
+    RouterRoute _routes[BACNET_ROUTER_MAX_ROUTES] {};
     uint16_t _routesCount = 0;
     uint8_t _portsCount = 0;
-    RouterDevice _routerDevice;
 
 
     // router ports/table
 };
 
+
+void printBacnetAddress(char* tag, const BACNET_ADDRESS &addr);
 

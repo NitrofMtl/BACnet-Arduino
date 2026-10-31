@@ -25,6 +25,10 @@ Before using BACnet MS/TP, uncomment the MS/TP datalink definition in 'ports/ard
 
 The MS/TP port uses three callbacks to communicate with the underlying serial/RS-485 implementation.
 
+This separation allows the MS/TP implementation to remain independent of the particular RS-485 library or transceiver hardware.
+
+The ArduinoRS485 library handles the RS-485 transceiver direction.
+
 ## Read Callback
 
 The read callback provides received bytes to the MS/TP stack.
@@ -135,24 +139,6 @@ For a different RS-485 implementation, the transmitting callback can use whateve
 
 ---
 
-# Using ArduinoRS485
-
-The following is an example of implementing the MS/TP callbacks using the Arduino `ArduinoRS485` library.
-
-```cpp
-#include <Arduino.h>
-#include "ArduinoRS485.h"
-
-#define DE_PIN RS485_DEFAULT_DE_PIN
-```
-
-The ArduinoRS485 library handles the RS-485 transceiver direction.
-
-The application uses the MS/TP callbacks to connect the ArduinoRS485 implementation to BACnet-Arduino.
-
-This separation allows the MS/TP implementation to remain independent of the particular RS-485 library or transceiver hardware.
-
----
 
 # RS-485 Timing
 
@@ -315,11 +301,7 @@ For example:
 ```cpp
 void setupMSTP()
 {
-    bacnet_init(&deviceInfos);
     mstp_nmax_master_set(5);
-
-    bacnet_time_callback_set(bacnet_get_time);
-    handler_timesync_set_callback_set(bacnet_sync_time);
 
     mstp_callback_read_set(rs485_read);
     mstp_callback_send_set(rs485_send);
@@ -361,241 +343,12 @@ BACnet MS/TP processing must be performed regularly from the Arduino main loop.
 The application should maintain the BACnet device timer and call:
 
 ```cpp
-bacnet_Poll_mstp();
-```
-
-For example:
-
-```cpp
 void loop()
 {
-    static uint32_t last_ms = millis();
-    uint32_t now = millis();
-
-    Device_Timer(now - last_ms);
-    last_ms = now;
-
-    bacnet_Poll_mstp();
-}
-```
-
-For DCC functionality, maintain the DCC timer once per second:
-
-```cpp
-static uint32_t lastTimer = 0;
-
-if (millis() - lastTimer >= 1000) {
-    lastTimer += 1000;
-    dcc_timer_seconds(1);
-}
-```
-
-A complete loop can therefore look like:
-
-```cpp
-void loop()
-{
-    static uint32_t last_ms = millis();
-    uint32_t now = millis();
-
-    Device_Timer(now - last_ms);
-    last_ms = now;
-
-    static uint32_t lastTimer = 0;
-
-    if (millis() - lastTimer >= 1000) {
-        lastTimer += 1000;
-        dcc_timer_seconds(1);
-    }
-
-    bacnet_Poll_mstp();
-}
-```
-
-Avoid long blocking operations in the main loop.
-
----
-
-# Complete ArduinoRS485 Example
-
-The following example shows the complete connection between the ArduinoRS485 library and BACnet-Arduino MS/TP.
-
-```cpp
-#ifdef MSTP_EXAMPLE
-
-#include <Arduino.h>
-#include "ArduinoRS485.h"
-
-// Opta-specific time library
-#include <mbed_rtc_time.h>
-
-// BACnet MS/TP
-#include "BACnet-Arduino_MSTP.h"
-
-#define DE_PIN RS485_DEFAULT_DE_PIN
-
-#define UNIT_MAC 1
-#define BACNET_MSTP_BAUD 115200
-
-#define RS485_PREDELAY 25
-#define RS485_POSTDELAY \
-    (15UL * 1000000UL / BACNET_MSTP_BAUD)
-
-const deviceInfos_t deviceInfos {
-    2,
-    "My Opta",
-    "Basic BACnet device running on Arduino",
-    "Mechanical room",
-    "Arduino",
-    "Opta Bacnet",
-    "1.0"
-};
-
-static void rs485_send(const uint8_t *p, uint16_t len)
-{
-    RS485.noReceive();
-    RS485.beginTransmission();
-
-    RS485.write(p, len);
-
-    mstp_silence_reset();
-
-    RS485.endTransmission();
-    RS485.receive();
-}
-
-static bool rs485_read(uint8_t *b)
-{
-    if (RS485.available()) {
-        if (b == nullptr) {
-            return true;
-        }
-
-        uint8_t byte = RS485.read();
-        *b = byte;
-
-        return true;
-    }
-
-    if (b != nullptr) {
-        *b = 0;
-    }
-
-    return false;
-}
-
-bool rs485_transmitting()
-{
-    return digitalRead(DE_PIN) == HIGH;
-}
-
-void bacnet_sync_time(
-    BACNET_DATE *bdate,
-    BACNET_TIME *btime,
-    bool UTC)
-{
-    // This example uses local time and therefore ignores the UTC flag.
-    // A real application should convert UTC when UTC == true.
-    (void)UTC;
-
-    tmElements_t tm_info =
-        BACnetSchedule::toTimeElements(*bdate, *btime);
-
-    time_t epoch_time = makeTime(tm_info);
-
-    set_time(epoch_time);
-}
-
-bool bacnet_get_time(
-    BACNET_DATE *bdate,
-    BACNET_TIME *btime,
-    int16_t *utc_offset_minutes,
-    bool *dst_active)
-{
-    time_t epoch = now();
-
-    tmElements_t tm_info = {};
-
-    breakTime(epoch, tm_info);
-
-    *bdate = BACnetSchedule::toBACnetDate(tm_info);
-    *btime = BACnetSchedule::toBACnetTime(tm_info);
-
-    *dst_active = false;
-
-    return true;
-}
-
-void setupMSTP()
-{
-    bacnet_init(&deviceInfos);
-    mstp_nmax_master_set(5);
-
-    // BACnet reads the current board time through this callback.
-    bacnet_time_callback_set(bacnet_get_time);
-
-    // Allow BACnet Time Synchronization requests
-    // to update the board clock.
-    handler_timesync_set_callback_set(bacnet_sync_time);
-
-    // Connect the MS/TP stack to the underlying RS-485 implementation.
-    mstp_callback_read_set(rs485_read);
-    mstp_callback_send_set(rs485_send);
-    mstp_callback_transmitting_set(rs485_transmitting);
-
-    // Configure the MS/TP baud rate.
-    mstp_baud_rate_set(BACNET_MSTP_BAUD);
-
-    // Initialize the MS/TP port.
-    init_bacnet_mstp(UNIT_MAC);
-}
-
-void setup()
-{
-    Serial.begin(9600);
-
-    RS485.begin(BACNET_MSTP_BAUD);
-
-    RS485.setDelays(
-        RS485_PREDELAY,
-        RS485_POSTDELAY);
-
-    RS485.receive();
-
-    setupMSTP();
-}
-
-void loop()
-{
-    // Device_Timer() expects the elapsed time
-    // since its previous call.
-    static uint32_t last_ms = millis();
-
-    uint32_t now = millis();
-
-    Device_Timer(now - last_ms);
-    last_ms = now;
-
-    // Run periodic one-second tasks without blocking
-    // the BACnet loop.
-    static uint32_t lastTimer = 0;
-
-    if (millis() - lastTimer >= 1000) {
-        lastTimer += 1000;
-
-        // Maintain BACnet DCC timing.
-        dcc_timer_seconds(1);
-    }
-
     bacnet_Poll_mstp();
 }
 
-#endif
 ```
-
-The example uses `ArduinoRS485`, but the BACnet MS/TP implementation itself does not depend on it.
-
-A different RS-485/UART implementation can be used by providing equivalent callbacks.
 
 ---
 
@@ -698,23 +451,7 @@ The recommended starting point for the RS-485 post-transmit delay is approximate
 
 # BACnet/IP vs BACnet MS/TP
 
-The application-level BACnet functionality is largely the same regardless of the datalink.
-
-The main difference is the transport initialization:
-
-|                      | BACnet/IP        | BACnet MS/TP  |
-| -------------------- | ---------------- | ------------- |
-| Physical transport   | Ethernet         | RS-485        |
-| BACnet datalink      | BACnet/IP        | BACnet MS/TP  |
-| Transport            | UDP              | Serial RS-485 |
-| Addressing           | IP address / UDP | MS/TP MAC     |
-| Token passing        | No               | Yes           |
-| Baud rate            | N/A              | Required      |
-| `bacnet_set_udp()`   | Required         | Not used      |
-| `bacnet_Poll()`      | Used             | Not used      |
-| `bacnet_Poll_mstp()` | Not used         | Used          |
-
-The same BACnet device objects, callbacks, Schedule functionality, and application logic can generally be used with either transport.
+BACnet MS/TP and BACnet/IP use different transport layers, but the same BACnet application functionality can generally be used with either. The main differences are in transport initialization, addressing, and polling.
 
 ---
 
@@ -740,3 +477,5 @@ The example demonstrates:
 * Schedule persistence where supported
 
 The example uses `ArduinoRS485` on the Arduino Opta, but the MS/TP port can be connected to other RS-485 implementations through the transport callbacks.
+
+A different RS-485/UART implementation can be used by providing equivalent callbacks.

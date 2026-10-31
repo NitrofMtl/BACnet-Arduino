@@ -1,3 +1,19 @@
+/*
+## BACnet MS/TP Example
+
+**Board:** Arduino Opta (STM32H747)
+
+This example demonstrates a BACnet MS/TP device using the `STM32RS485DMA` library as the RS-485 interface.
+
+The `STM32RS485DMA` library is an experimental, low-level RS-485 implementation for STM32 boards, providing an ArduinoRS485-compatible interface using UART and DMA.
+
+**Experimental status / Notes:**
+- Communication has been tested successfully on the Arduino Opta.
+- MS/TP communication works, but the observed performance is currently quite slow.
+- The implementation is still experimental and may require further optimization and testing.
+- The `STM32RS485DMA` library is required for this example.
+*/
+
 #include <Arduino.h>
 
 #include "STM32RS485DMA.h"
@@ -7,6 +23,17 @@
 
 //BACnet MS/TP
 #include "BACnet-Arduino_MSTP.h"
+
+// Verify that the shared configuration is compatible with this example.
+#if !defined(BACDL_MSTP)
+#error "This example requires MSTP datalink to be enable in arduino_configs.h"
+#endif
+#if defined(BACDL_MULTIPLE)
+#error "This example requires only MSTP as datalink to be enable in arduino_configs.h"
+#endif
+#if defined(BACNET_ROUTER)
+#error "This example requires BACNET_ROUTER to be disabled in arduino_configs.h"
+#endif
 
 
 #define DE_PIN RS485_DEFAULT_DE_PIN

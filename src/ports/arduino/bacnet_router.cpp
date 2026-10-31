@@ -39,76 +39,39 @@ constexpr size_t TX_BUFFER_SIZE = constexpr_max(
 uint8_t _txBuffer[TX_BUFFER_SIZE] = {};
 
 
-bool BacnetRouterClass::addPort(BacnetDatalink portType, uint16_t network)
+bool BacnetRouterClass::addPort(RouterPort *port)
 {
-    BACNET_ADDRESS addr = {};
-    switch (portType){
-
-#ifdef BACNET_ROUTER_BIP
-        case BacnetDatalink::BIP:
-            bip_get_my_address(&addr);
+    int8_t slot = -1;
+    for (uint8_t i = 0; i < BACNET_ROUTER_MAX_PORTS; i++) {
+        if (_ports[i] != nullptr) {
+            if (_ports[i]->net == port->net) return false;
+        } else {
+            slot = i;
             break;
-#endif 
-#ifdef BACNET_ROUTER_ETHERNET
-        case BacnetDatalink::ETHERNET:
-            ethernet_get_my_address(&addr);
-            break;
-#endif
-#ifdef BACNET_ROUTER_ARCNET
-        case BacnetDatalink::ARCNET:
-            arcnet_get_my_address(&addr);
-            break;
-#endif
-#ifdef BACNET_ROUTER_BIP6
-        case BacnetDatalink::BIP6:
-            bip6_get_my_address(&addr);
-            break;
-#endif
-#ifdef BACNET_ROUTER_MSTP
-        case BacnetDatalink::MSTP:
-            dlmstp_get_my_address(&addr);
-            break;
-#endif
-#ifdef BACNET_ROUTER_ZIGBEE
-        case BacnetDatalink::ZIGBEE:
-            bzll_get_my_address(&addr);
-            break;
-#endif
-#ifdef BACNET_ROUTER_BSC
-        case BacnetDatalink::BSC:
-            bsc_get_my_address(&addr);
-            break;
-#endif
-    default:
-        return false;
+        }
     }
-    if (_portsCount >= BACNET_ROUTER_MAX_PORTS) return false; //slots already full
-    if ( network == 0 || network == BACNET_BROADCAST_NETWORK ) return false;
 
-    for (uint8_t i = 0; i < _portsCount; i++) {
-        if (_ports[i].portType == portType) return false; //port type already exists
-        if (_ports[i].net == network) return false; // network number already exists
-    }
-    uint8_t slot = _portsCount;
-    RouterPort rp{addr, network, portType};
-    _ports[slot] = rp;
+    if (slot == -1) return false; // no available slot
 
+    _ports[slot] = port;
     _portsCount++;
+    port->activeDatalinkSet();
 
     return true;
-}
 
+}
 
 void BacnetRouterClass::poll()
 {
     static uint8_t pdu[512];
 
     for (uint8_t i = 0; i < _portsCount; i++) {
-        RouterPort &port = _ports[i];
+        RouterPort &port = *_ports[i];
 
-        datalinkSet(port.portType);
+        port.activeDatalinkSet();
 
         BACNET_ADDRESS src = {};
+
         uint16_t len = datalink_receive(
             &src,
             pdu,
@@ -116,6 +79,7 @@ void BacnetRouterClass::poll()
             0);
 
         if (len > 0) {
+
             routingNpduHandler(
                 port.net,
                 src,
@@ -132,24 +96,13 @@ void BacnetRouterClass::poll()
 }
 
 
-bool BacnetRouterClass::attachRouterDevice(BacnetDatalink portType) {
-    for (uint8_t i = 0; i < _portsCount; i++) {
-        if (_ports[i].portType == portType) {
-            _routerDevice.portIndex = i;
-            return true;
-        }
-    }
-    return false;
-}
-
-
-BacnetRouterClass::RouterPort *BacnetRouterClass::findPort(uint16_t network)
+RouterPort *BacnetRouterClass::findPort(uint16_t network)
 {
     for (uint8_t i = 0; i < _portsCount; i++) {
-        if (_ports[i].net == network)
-            return &_ports[i];
+        if (_ports[i]->net == network)
+            return _ports[i];
     }
-
+    Serial.println("[ERROR] No port found for network: " + String(network));
     return nullptr;
 }
 
@@ -167,13 +120,13 @@ BACNET_ADDRESS BacnetRouterClass::getBroadcastAddress() const
 
 
 int BacnetRouterClass::sendPdu(
-    const RouterPort &port,
+    RouterPort &port,
     BACNET_ADDRESS &dest,
     BACNET_NPDU_DATA &npdu,
     uint8_t *pdu,
     uint16_t pduLen)
 {
-    datalinkSet(port.portType);
+    port.activeDatalinkSet();
     return datalink_send_pdu(&dest, &npdu, pdu, pduLen);
 }
 
@@ -300,20 +253,17 @@ bool BacnetRouterClass::routeBroadcastApdu(
     bool sent = false;
 
     for (uint8_t i = 0; i < _portsCount; i++) {
-        RouterPort &port = _ports[i];
+        RouterPort &port = *_ports[i];
         if (port.net == snet) {
 #if defined (ROUTER_DEVICE)
-        //Broadcast for local device
-        if (_routerDevice.portIndex < _portsCount) {
-            datalinkSet(port.portType);
+            port.activeDatalinkSet();
             apdu_handler(&src, apdu, apduLen);
-        }
 #endif //ROUTER_DEVICE
             continue;
         }
         BACNET_ADDRESS datalinkDest = {};
 
-        datalinkSet(port.portType);
+        port.activeDatalinkSet();
         datalink_get_broadcast_address(&datalinkDest);
 
         if (sendPdu(port, datalinkDest, npdu, _txBuffer, pduLen)) {
@@ -426,7 +376,7 @@ bool BacnetRouterClass::routeUnknownApdu(
     bool sent = false;
 
     for (uint8_t i = 0; i < _portsCount; i++) {
-        RouterPort &port = _ports[i];
+        RouterPort &port = *_ports[i];
 
         if (port.net == snet)
             continue;
@@ -693,9 +643,9 @@ void BacnetRouterClass::whoIsRouterToNetworkHandler(
 
     // Unknown network: ask the other ports.
     for (uint8_t i = 0; i < _portsCount; i++) {
-        if (_ports[i].net != snet) {
+        if (_ports[i]->net != snet) {
             sendWhoIsRouterToNetwork(
-                _ports[i].net, network);
+                _ports[i]->net, network);
         }
     }
 }
@@ -780,7 +730,7 @@ void BacnetRouterClass::sendIAmRouterToNetwork(
         // Add directly connected networks reachable
         // through ports other than the source port.
         for (uint8_t i = 0; i < _portsCount; i++) {
-            if (_ports[i].net == snet)
+            if (_ports[i]->net == snet)
                 continue;
 
             if ((pduLen + 2u) > TX_BUFFER_SIZE)
@@ -788,7 +738,7 @@ void BacnetRouterClass::sendIAmRouterToNetwork(
 
             pduLen += encode_unsigned16(
                 &_txBuffer[pduLen],
-                _ports[i].net);
+                _ports[i]->net);
         }
 
         // Add learned networks reachable through
@@ -918,7 +868,7 @@ void BacnetRouterClass::sendInitializeRoutingTableAck(
 
         pduLen += encode_unsigned16(
             &_txBuffer[pduLen],
-            _ports[i].net);
+            _ports[i]->net);
 
         // Port ID
         _txBuffer[pduLen++] = i + 1;
@@ -995,70 +945,6 @@ void BacnetRouterClass::sendRejectMessageToNetwork(
 }
 
 
-#if defined(BACDL_MULTIPLE)
-void BacnetRouterClass::datalinkSet(BacnetDatalink portType)
-{
-    switch (portType){
-
-#ifdef BACNET_ROUTER_BIP
-    case BacnetDatalink::BIP: {
-        char bipName[] = "bip";
-        datalink_set(bipName);
-        break;
-    }
-#endif 
-#ifdef BACNET_ROUTER_ETHERNET
-    case BacnetDatalink::ETHERNET: {
-        char ethernetName[] = "ethernet";
-        datalink_set(ethernetName);
-        break;
-    }
-#endif
-#ifdef BACNET_ROUTER_ARCNET
-    case BacnetDatalink::ARCNET: {
-        char arcnetName[] = "arcnet";
-        datalink_set(arcnetName);
-        break;
-    }
-#endif
-#ifdef BACNET_ROUTER_BIP6
-    case BacnetDatalink::BIP6: {
-        char bip6Name = "bip6";
-        datalink_set(bip6Name);
-        break;
-    }
-#endif
-#ifdef BACNET_ROUTER_MSTP
-    case BacnetDatalink::MSTP: {
-        char mstpName[] = "mstp";
-        datalink_set(mstpName);
-        break;
-    }
-#endif
-#ifdef BACNET_ROUTER_ZIGBEE
-    case BacnetDatalink::ZIGBEE: {
-    char zigbeeName = "zigbee";
-        datalink_set(zigbeeName);
-        break;
-    }
-#endif
-#ifdef BACNET_ROUTER_BSC
-    case BacnetDatalink::BSC: {
-        char bscName = "bsc";
-        datalink_set(bscName);
-        break;
-    }
-#endif
-    default:
-        break;
-    }
-}
-#else //BACDL_MULTIPLE
-void BacnetRouterClass::datalinkSet(BacnetDatalink portType)
-{}
-#endif //BACDL_MULTIPLE
-
-
 #if defined (ROUTER_DEVICE)
 bool BacnetRouterClass::handleLocalDevice(
     uint16_t snet,
@@ -1068,7 +954,7 @@ bool BacnetRouterClass::handleLocalDevice(
 {
     RouterPort *sPort = findPort(snet);
     if (!sPort) return false;
-    datalinkSet(sPort->portType);
+    sPort->activeDatalinkSet();
     apdu_handler(&src, apdu, apduLen);
     return true;
 }
@@ -1079,7 +965,7 @@ bool BacnetRouterClass::handleLocalDevice(
 #if defined(ROUTER_DEVICE)
 bool BacnetRouterClass::isRouterDevice(RouterPort *port, BACNET_ADDRESS routeDest)
 {
-    datalinkSet(port->portType);
+    port->activeDatalinkSet();
     BACNET_ADDRESS myAddress;
     datalink_get_my_address(&myAddress);
 
@@ -1092,4 +978,5 @@ bool BacnetRouterClass::isRouterDevice(RouterPort *port, BACNET_ADDRESS routeDes
     return true;
 }
 #endif
+
 

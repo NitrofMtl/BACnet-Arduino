@@ -7,31 +7,29 @@
  *********************************************************************/
 
 
-
+#include "Arduino.h"
 #include <stdint.h> /* for standard integer types uint8_t etc. */
 #include <stdbool.h> /* for the standard bool type. */
-#include <Ethernet.h>
-#include <Udp.h>
 
 #include "bacnet/bacint.h"
 #include "bacnet/datalink/bip.h"
 
-
-
-#include <Udp.h>
-#include "bacnet_udp_port.h"
-
+#include "bacnet_arduino_cpp_compat.h"
+//#if defined(BACDL_BIP)
+#include "BIP_router_port.h"
+//#endif
 #if PRINT_ENABLED | DEBUG
 #include <stdio.h> /* for standard i/o, like printing */
 #endif
 
 
-UDP* bacnetUdp; 
 
 
 void bip_get_my_address(BACNET_ADDRESS *my_address)
 {
-    IPAddress ip = Ethernet.localIP();
+    auto* peripheral = BIP_Port::active();
+    if (!peripheral) return;
+    IPAddress ip = peripheral->localIP();
 
     my_address->mac_len = 6;
 
@@ -40,7 +38,7 @@ void bip_get_my_address(BACNET_ADDRESS *my_address)
     my_address->mac[2] = ip[2];
     my_address->mac[3] = ip[3];
 
-    uint16_t port = bacnet_get_udp_port();
+    uint16_t port = peripheral->getUdpPort();
     my_address->mac[4] = port >> 8 & 0xFF;
     my_address->mac[5] = port & 0xFF;
 
@@ -58,7 +56,9 @@ void bip_get_broadcast_address(BACNET_ADDRESS *dest)
     dest->mac[2] = 255;
     dest->mac[3] = 255;
 
-    uint16_t port = bacnet_get_udp_port();
+    auto* peripheral = BIP_Port::active();
+    if (!peripheral) return;
+    uint16_t port = peripheral->getUdpPort();
     dest->mac[4] = port >> 8 & 0xFF;
     dest->mac[5] = port & 0xFF;
 
@@ -70,8 +70,6 @@ void bip_get_broadcast_address(BACNET_ADDRESS *dest)
 bool bip_init(char *ifname)
 {
     (void)ifname;
-
-    //udp.begin(47808); // BAC0 //udp init in sketch Setup()
 
     return true;
 }
@@ -124,9 +122,12 @@ int bip_send_pdu(
         ((uint16_t)dest->mac[4] << 8) |
         dest->mac[5];
 
-    g_bacnet_udp->beginPacket(ip, port);
-    g_bacnet_udp->write(mtu, mtu_len);
-    g_bacnet_udp->endPacket();
+    auto* peripheral = BIP_Port::active();
+    if (!peripheral) return 0;
+    peripheral->beginPacket(ip, port);
+    peripheral->write(mtu, mtu_len);
+    peripheral->endPacket();
+    
 
     return mtu_len;
 }
@@ -151,18 +152,17 @@ uint16_t bip_receive(
 {
     (void)timeout;
 
-    if (g_bacnet_udp == nullptr) {
-        return 0;
-    }
+    auto* peripheral = BIP_Port::active();
+    if (!peripheral) return 0;
 
-    int packetSize = g_bacnet_udp->parsePacket();
+    int packetSize = peripheral->parsePacket();
 
     if(packetSize <= 0)
         return 0;
 
     uint8_t buffer[1500];
 
-    int len = g_bacnet_udp->read(buffer, sizeof(buffer));
+    int len = peripheral->read(buffer, sizeof(buffer));
 
     if(len < 4) return 0;
 
@@ -177,8 +177,8 @@ uint16_t bip_receive(
     }
 
 //Extract sender
-    IPAddress remoteIp = g_bacnet_udp->remoteIP();
-    uint16_t remotePort = bacnet_get_udp_port();
+    IPAddress remoteIp = peripheral->remoteIP();
+    uint16_t remotePort = peripheral->remotePort();
 
     src->mac_len = 6;
 
