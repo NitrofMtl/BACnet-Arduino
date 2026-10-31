@@ -18,6 +18,11 @@ Edit arduino_configs.h:
     -#define BACNET_ROUTER_BIP_PORTS_COUNT  2
     -#define BACNET_ROUTER_MSTP_PORTS_COUNT 1
 
+  Parameters:
+  NOTE: For the ESP32 have enought ram,
+  MAX_TSM_TRANSACTIONS have been set from 31 to 15:
+    -#define MAX_TSM_TRANSACTIONS 15//31
+
 Dependencies / Notes:
 
 The ESP32 requires a modification to the ArduinoRS485 library
@@ -27,6 +32,14 @@ locally; see the project's documentation for details.
 Ensure that the configured router port counts match the number
 of ports used by the example.
 */
+
+#if !defined(BACNET_ROUTER)
+#error "This example requires BACNET_ROUTER to be enabled"
+#endif
+
+#if !defined(BACDL_MULTIPLE) && !defined(BACNET_ROUTER_MULTIPLE)
+#error "This example requires multiple router ports or multiple data links"
+#endif 
 
 
 #include <Arduino.h>
@@ -99,8 +112,8 @@ IPAddress WiFiIp = {192,168,0,152};
 IPAddress WiFiGateway = {192,168,0,1};
 IPAddress WiFiSubnet = {255,255,255,0};
 WiFiServer WiFI(WiFiIp);
-const char* ssid     = "Nitrofnet"; // Change this to your WiFi SSID
-const char* WiFiPassword = "3011198030111980"; // Change this to your WiFi password
+const char* ssid     = "MyNetworkSSID"; // Change this to your WiFi SSID
+const char* WiFiPassword = "MyWiFiPassword"; // Change this to your WiFi password
 constexpr uint16_t bacnetWiFiUdpPort = 47809; // BAC1
 WiFiUDP WiFiUdp;
 

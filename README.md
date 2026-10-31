@@ -4,7 +4,7 @@ Arduino BACnet library based on the open-source bacnet-stack project.
 
 BACnet-Arduino provides an Arduino-oriented interface to the BACnet stack, including BACnet object creation and access, time integration, device reinitialization, and BACnet Schedule support. The Arduino port can use the BACnet datalinks supported by the underlying stack; currently, examples are provided for BACnet/IP and BACnet MS/TP.
 
-The library keeps the BACnet protocol stack largely unchanged while providing an Arduino-specific port layer. It also provides BACnet/IP ↔ MS/TP routing through the BacnetRouterClass.
+The library keeps the BACnet protocol stack largely unchanged while providing an Arduino-specific port layer. It also provides BACnet/IP ↔ MS/TP routing through the BacnetRouterClass, including support for multiple ports and networks.
 
 > **Status:** 0.7.0
 
@@ -14,8 +14,8 @@ The library keeps the BACnet protocol stack largely unchanged while providing an
 
 * BACnet/IP support
 * BACnet MS/TP support
-* BACnet/IP ↔ MS/TP routing
-* Arduino UDP transport integration
+* Multi-port BACnet routing (BACnet/IP and MS/TP)
+* Generic BIP peripheral integration (template-based network and UDP interfaces)
 * Arduino RS-485 / MS/TP transport integration
 * BACnet device configuration
 * BACnet object creation and Present Value access

@@ -1,8 +1,13 @@
 #pragma once
 
+#include "Arduino.h"
 #include "bacnet_peripheral.h"
 
-class BacnetRouterClass;
+class BIP_Port;
+#if !defined(BACNET_ROUTER)
+extern BIP_Port BIP;
+#endif
+
 
 class BIP_PeripheralBase
 {
@@ -30,6 +35,9 @@ class BIP_Peripheral : public BIP_PeripheralBase
     BIP_Peripheral(Teth *ethernet, Tudp *udp, uint16_t port)
     : BIP_PeripheralBase(port), _ethernet(ethernet), _udp(udp)
     {}
+#if defined (BACDL_BIP) && !defined(BACNET_ROUTER)
+    void begin() { BIP = BIP_Port(BacnetDatalink::BIP, 0, this); }
+#endif
     Teth& ethernet() { return *_ethernet; }
     Tudp& udp() { return *_udp; }
 
@@ -74,13 +82,13 @@ class BIP_Port : public RouterPort
 {
 public:
     BIP_Port(BacnetDatalink portType, uint16_t net, BIP_PeripheralBase* peripheral);
-
-    bool registerPeripheral(BacnetRouterClass*, BIP_PeripheralBase* peripheral);
-    static BIP_PeripheralBase& active();
-
+    static BIP_PeripheralBase* active();
 private:
     void activePeripheralSet() override;
     static BIP_PeripheralBase* _activePeripheral;
     BIP_PeripheralBase* _peripheral;
 };
 
+#if !defined(BACNET_ROUTER)
+extern BIP_Port BIP;
+#endif

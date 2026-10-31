@@ -328,3 +328,320 @@ See the router example included with the library for a complete Arduino implemen
 * When a local Router Device is enabled, `router.poll()` also services the local device.
 * The router does not require changes to the underlying BACnet application handlers.
 * The router preserves the original source address when delivering routed requests to the local device, allowing responses to be returned through the network on which the request arrived.
+
+
+
+---
+
+---
+
+---
+
+
+---
+
+
+
+# BACnet Router
+
+`BacnetRouterClass` provides BACnet network-layer routing between configured BACnet networks.
+
+A router can connect multiple BACnet networks using supported datalinks, such as:
+
+- BACnet/IP
+- BACnet MS/TP
+
+Multiple ports of the same datalink can also be used. For example, a router can connect two BACnet/IP networks and one BACnet MS/TP network.
+
+The router is independent of the physical transport implementation. Each port is configured with its own datalink, network number, and transport peripheral.
+
+A router can operate without hosting a local BACnet Device. An optional local device can also be configured when required.
+
+For information about configuring individual datalinks, see the [BACnet/IP](BIP.md) and [BACnet MS/TP](mstp.md) documentation.
+
+---
+
+## Configuration
+
+Router support and the required datalinks must be enabled in:
+
+`ports/arduino/arduino_configs.h`
+
+For example, to enable BACnet/IP, BACnet MS/TP, and router support:
+
+```cpp
+#define BACDL_BIP
+#define BACDL_MSTP
+#define BACNET_ROUTER
+```
+
+The number of ports configured for each datalink must also be specified:
+
+```cpp
+#define BACNET_ROUTER_BIP_PORTS_COUNT  2
+#define BACNET_ROUTER_MSTP_PORTS_COUNT 1
+```
+
+These values must match the number of ports of each datalink used by the application.
+
+If the router will also host a local BACnet Device, enable:
+
+```cpp
+#define ROUTER_DEVICE
+```
+
+A local BACnet Device is optional. It is not required for routing traffic between networks.
+
+---
+
+## Router Networks
+
+Each router port belongs to a BACnet network and must be assigned a network number.
+
+For example:
+
+```cpp
+#define ROUTER_NETWORK_BIP_ETH  100
+#define ROUTER_NETWORK_BIP_WIFI 300
+#define ROUTER_NETWORK_MSTP1    200
+```
+
+Each network number must be unique within the BACnet internetwork.
+
+The network number is assigned when the port is created.
+
+## Creating the BIP peripheral
+
+The BIP peripheral provides BACnet/IP communication using an Arduino-compatible network interface and UDP class. It is templated on both classes, allowing different network and UDP implementations to be used.
+
+Create a peripheral instance by passing pointers to the network interface and UDP objects, along with the BACnet UDP port:
+
+```cpp
+
+BIP_Peripheral<EthernetClass, EthernetUDP> EthPort(
+    &Ethernet, &EthUdp, bacnetEthUdpPort);
+
+```
+The network interface and UDP objects must be configured separately. The UDP port must match the port used when initializing the UDP object with begin().
+
+Once the peripheral is created, it can be used to create a router port associated with a BACnet network number.
+
+```cpp
+BIP_Port BIP1(
+    BacnetDatalink::BIP, ROUTER_NETWORK_BIP_ETH, &EthPort);
+```
+
+The same approach applies to other compatible network and UDP classes, such as Wi-Fi.
+
+```cpp
+BIP_Peripheral<WiFiClass, WiFiUDP> WiFiPort(
+    &WiFi, &WiFiUdp, bacnetWiFiUdpPort);
+BIP_Port BIP2(
+    BacnetDatalink::BIP, ROUTER_NETWORK_BIP_WIFI, &WiFiPort);
+```
+
+## Creating the MS/TP peripheral
+
+```cpp
+MSTP_port<RS485Class> MSTP1 = {
+    BacnetDatalink::MSTP,
+    ROUTER_NETWORK_MSTP1,
+    &RS485
+};
+```
+
+The transport peripheral is supplied by the application. Its configuration and initialization follow the corresponding datalink documentation.
+
+---
+
+## Router Initialization
+
+Create the router instance:
+
+```cpp
+BacnetRouterClass router;
+```
+
+Add the configured ports by passing them to `router.begin()`:
+
+```cpp
+void setupRouter()
+{
+    if (!router.begin(&BIP1, &BIP2, &MSTP1)) {
+        Serial.println("Failed to add router ports");
+    }
+}
+```
+
+Call `router.begin()` before initializing the individual ports.
+
+After the router has been configured, initialize each physical transport and its corresponding BACnet datalink.
+
+For example:
+
+```cpp
+void setup()
+{
+    Serial.begin(9600);
+
+    setupRouter();
+
+    setupEthernetPort();
+    setupWifiPort();
+    setupMSTP();
+
+    // Optional local BACnet Device initialization
+}
+```
+
+The initialization of Ethernet, Wi-Fi, and RS-485 depends on the hardware and libraries being used. Refer to the individual datalink documentation for the corresponding setup requirements.
+
+---
+
+## Polling
+
+When using `BacnetRouterClass`, call:
+
+```cpp
+router.poll();
+```
+
+regularly from the Arduino `loop()`.
+
+The router handles polling of its configured datalinks and forwarding of received BACnet traffic.
+
+Do not call the individual BIP or MS/TP polling functions separately when using the router.
+
+For example:
+
+```cpp
+void loop()
+{
+    router.poll();
+}
+```
+
+If the application also hosts a local BACnet Device, its normal application timers must still be maintained. See the [Router Device](#router-device) section.
+
+---
+
+## Complete Router Example
+
+A complete router example is included with the library.
+
+The example uses a LilyGO TTGO T-Display (ESP32) and demonstrates a configuration with:
+
+- Two BACnet/IP ports:
+  - Ethernet
+  - Wi-Fi
+- One BACnet MS/TP port:
+  - RS-485
+
+The example includes the physical interface configuration, transport callbacks, router initialization, and main loop.
+
+The example's configuration requires the following definitions in `ports/arduino/arduino_configs.h`:
+
+```cpp
+#define BACDL_BIP
+#define BACDL_MSTP
+#define BACNET_ROUTER
+#define ROUTER_DEVICE
+
+#define BACNET_ROUTER_BIP_PORTS_COUNT  2
+#define BACNET_ROUTER_MSTP_PORTS_COUNT 1
+
+#define MAX_TSM_TRANSACTIONS 15
+```
+
+The reduced `MAX_TSM_TRANSACTIONS` value is used by this ESP32 example to accommodate its available RAM.
+
+**ESP32 dependency:** The example requires a modification to the ArduinoRS485 library for the RS-485 implementation to work correctly. See the project's documentation for details.
+
+The configured router port counts must match the ports instantiated by the example.
+
+---
+
+## Router Device
+
+A router can optionally host a local BACnet Device in addition to forwarding traffic between networks.
+
+This is a separate function from network-layer routing. The router can operate without a local device; enable `ROUTER_DEVICE` only when the application requires one.
+
+### Device Configuration
+
+When using a local Router Device, enable:
+
+```cpp
+#define ROUTER_DEVICE
+```
+
+Provide the normal BACnet device information:
+
+```cpp
+const deviceInfos_t deviceInfos {
+    2000,
+    "TTGO_Router",
+    "Basic BACnet device running on Arduino",
+    "Mechanical room",
+    "Arduino",
+    "TTGO Bacnet",
+    "1.0",
+    "0.1"
+};
+```
+
+Initialize the BACnet device:
+
+```cpp
+bacnet_init(&deviceInfos);
+```
+
+The Device Instance is a BACnet device identifier. It is separate from the network number and the MS/TP MAC address.
+
+For example, a project may use the following convention:
+
+```cpp
+// Project convention: network number * 1000 + MS/TP MAC.
+const deviceInfos_t deviceInfos {
+    ROUTER_NETWORK_MSTP1 * 1000u + UNIT_MAC,
+    // Remaining device information...
+};
+```
+
+This is only an application-defined convention. BACnet does not require the Device Instance to be calculated from the network number or MAC address.
+
+### Device Application Requirements
+
+The local device uses the normal BACnet-Arduino application functionality.
+
+If required by the application, configure the BACnet time callbacks:
+
+```cpp
+setTimeCallback_set(set_time);
+```
+
+The application must also maintain the normal BACnet device and DCC timers.
+
+For example:
+
+```cpp
+void loop()
+{
+    static uint32_t last_ms = millis();
+    uint32_t now = millis();
+
+    Device_Timer(now - last_ms);
+    last_ms = now;
+
+    static uint32_t lastTimer = 0;
+
+    if (millis() - lastTimer >= 1000) {
+        lastTimer += 1000;
+        dcc_timer_seconds(1);
+    }
+
+    router.poll();
+}
+```
+
+The router handles the configured datalinks through `router.poll()`. The application remains responsible for the normal device timers and any other application-specific processing.

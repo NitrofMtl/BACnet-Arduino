@@ -19,9 +19,12 @@ void BIP_Port::activePeripheralSet()
 }
 
 
-BIP_PeripheralBase& BIP_Port::active()
+BIP_PeripheralBase* BIP_Port::active()
 {
-    return *_activePeripheral;
+    return _activePeripheral;
 }
 
 
+#if !defined(BACNET_ROUTER)
+BIP_Port BIP(BacnetDatalink::BIP, 0, nullptr);
+#endif

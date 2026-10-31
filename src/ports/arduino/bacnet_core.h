@@ -59,9 +59,7 @@
 #include "bacnet/basic/object/msv.h"
 
 //port libs
-//#include "ports/arduino/bacnet_udp_port.h"
 #include "ports/arduino/device.h"
-//#include "ports/arduino/bacnet.h"
 #include "ports/arduino/objects.h"
 #include "ports/arduino/datetime_ports.h"
 #include "ports/arduino/Schedule.h"

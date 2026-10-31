@@ -1,28 +1,28 @@
 #ifndef BACNET_PERIPHERAL_H
 #define BACNET_PERIPHERAL_H
 
-#include "bacnet.h"
+#include "arduino_configs.h"
 
 enum class BacnetDatalink : uint8_t {
-#ifdef BACNET_ROUTER_BIP
+#ifdef BACDL_BIP
     BIP,
 #endif 
-#ifdef BACNET_ROUTER_ETHERNET
+#ifdef BACDL__ETHERNET
     ETHERNET,
 #endif
-#ifdef BACNET_ROUTER_ARCNET
+#ifdef BACDL_ARCNET
     ARCNET,
 #endif
 #ifdef BACDL_BIP6
     BIP6,
 #endif
-#ifdef BACNET_ROUTER_MSTP
+#ifdef BACDL_MSTP
     MSTP,
 #endif
 #ifdef BACDL_ZIGBEE
     ZIGBEE,
 #endif
-#ifdef BACNET_ROUTER_BSC
+#ifdef BACDL_BSC
     BSC,
 #endif
 };

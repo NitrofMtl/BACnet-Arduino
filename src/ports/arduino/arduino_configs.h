@@ -6,10 +6,10 @@
 //Define all needed for multimode!
 
 //Ethernet configuration
-#define BACDL_BIP //<--- Uncomment
+//#define BACDL_BIP //<--- Uncomment
 
 //MSTP configuration
-#define BACDL_MSTP //<--- Uncomment
+//#define BACDL_MSTP //<--- Uncomment
 
 //ARCNET configurations
 //#define BACDL_ARCNET //<--- Uncomment
@@ -24,7 +24,7 @@
 //#define BACDL_BSC //<--- Uncomment
 
 //Router configuration
-#define BACNET_ROUTER //<--- Uncomment
+//#define BACNET_ROUTER //<--- Uncomment
 
 #ifdef BACNET_ROUTER
 //Router device's configuration
@@ -45,7 +45,7 @@
 //4	Fine if you have little simultaneous client activity
 //2	Possible for a very constrained device
 //1	Minimum practical value
-#define MAX_TSM_TRANSACTIONS 15//31
+#define MAX_TSM_TRANSACTIONS 31
 
 #define MAX_ADDRESS_CACHE 63
 
@@ -54,7 +54,7 @@
 #define BACNET_DAILY_SCHEDULE_TIME_VALUES_SIZE 10
 
 
-#define BACNET_ROUTER_BIP_PORTS_COUNT 2
+#define BACNET_ROUTER_BIP_PORTS_COUNT 1
 #define BACNET_ROUTER_ETHERNET_PORTS_COUNT 1
 #define BACNET_ROUTER_ARCNET_PORTS_COUNT 1
 #define BACNET_ROUTER_BIP6_PORTS_COUNT 1
@@ -140,7 +140,18 @@
 #endif
 
 
+#if defined(BACNET_ROUTER)
+    #if (BACNET_BIP_PORTS_COUNT > 1) || \
+        (BACNET_MSTP_PORTS_COUNT > 1) || \
+        (BACNET_BIP6_PORTS_COUNT > 1) || \
+        (BACNET_ETHERNET_PORTS_COUNT > 1) || \
+        (BACNET_ARCNET_PORTS_COUNT > 1) || \
+        (BACNET_ZIGBEE_PORTS_COUNT > 1) || \
+        (BACNET_BSC_PORTS_COUNT > 1)
 
+        #define BACNET_ROUTER_MULTIPLE 1
+    #endif
+#endif
 
 
 #if defined(BACDL_BIP)

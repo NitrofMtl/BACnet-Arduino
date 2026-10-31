@@ -5,8 +5,11 @@
 
 ### Add
 - Added multi-port routing support for BACnet/IP and MS/TP, enabling a single router instance to connect multiple BACnet networks.
+- Added compile time configs validation in each examples.
 
 ### Changed
+- Refactored BACnet/IP peripheral integration to use template-based network and UDP interfaces, removing the dependency on a specific Arduino UDP implementation.
+- Update examples to use the new API.
 `MS/TP`
 - Removed the unused `over_init` variable from `bacnet_mstp_init()`.
 - Restored the baud-rate-dependent calculation of `turnaround_ms` instead of the hardcoded value.
