@@ -30,7 +30,7 @@
 #if DEBUG_PRINTF_WITH_TIMESTAMP
 /**
  * @brief Print timestamp with a printf string
- * @param format - printf format str
+ * @param format - printf format string
  * @param ... - variable arguments
  * @note This function is only available if
  *  DEBUG_PRINTF_WITH_TIMESTAMP is non-zero

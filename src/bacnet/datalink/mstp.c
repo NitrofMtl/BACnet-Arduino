@@ -41,7 +41,6 @@
 #undef PRINT_ENABLED_MASTER
 #endif
 
-//#define PRINT_ENABLED_RECEIVE
 #if defined(PRINT_ENABLED_RECEIVE)
 #define printf_receive debug_printf
 #else
@@ -51,7 +50,6 @@ static __inline__ void printf_receive(const char *format, ...)
 }
 #endif
 
-//#define PRINT_ENABLED_RECEIVE_DATA
 #if defined(PRINT_ENABLED_RECEIVE_DATA)
 #define printf_receive_data debug_printf
 #else
@@ -61,7 +59,6 @@ static __inline__ void printf_receive_data(const char *format, ...)
 }
 #endif
 
-//#define PRINT_ENABLED_RECEIVE_ERRORS
 #if defined(PRINT_ENABLED_RECEIVE_ERRORS)
 #define printf_receive_error debug_printf
 #else
@@ -71,7 +68,6 @@ static __inline__ void printf_receive_error(const char *format, ...)
 }
 #endif
 
-//#define PRINT_ENABLED_MASTER
 #if defined(PRINT_ENABLED_MASTER)
 #define printf_master debug_printf
 #else
@@ -315,7 +311,7 @@ void MSTP_Receive_Frame_FSM(struct mstp_port_struct_t *mstp_port)
                 INCREMENT_AND_LIMIT_UINT8(mstp_port->EventCount);
             } else if (mstp_port->DataAvailable == true) {
                 /* wait for the start of a frame. */
-                printf_receive_data("MSTP Rx idle: %02X ", mstp_port->DataRegister);
+                printf_receive_data("MSTP Rx: %02X ", mstp_port->DataRegister);
                 if (mstp_port->DataRegister == 0x55) {
                     /* Preamble1 */
                     /* receive the remainder of the frame. */
@@ -632,16 +628,6 @@ void MSTP_Receive_Frame_FSM(struct mstp_port_struct_t *mstp_port)
  */
 bool MSTP_Master_Node_FSM(struct mstp_port_struct_t *mstp_port)
 {
-    static MSTP_MASTER_STATE last_state = MSTP_MASTER_STATE_INITIALIZE;
-
-    static bool last_valid = false;
-    static uint8_t last_frame_type = 0xFF;
-    bool is_new_frame = mstp_port->ReceivedValidFrame && 
-                        (!last_valid || mstp_port->FrameType != last_frame_type);
-    
-    last_valid = mstp_port->ReceivedValidFrame;
-    last_frame_type = mstp_port->FrameType;
-
     unsigned length = 0;
     uint8_t next_poll_station = 0;
     uint8_t next_this_station = 0;
@@ -775,7 +761,6 @@ bool MSTP_Master_Node_FSM(struct mstp_port_struct_t *mstp_port)
                         break;
                     case FRAME_TYPE_BACNET_DATA_EXPECTING_REPLY:
                     case FRAME_TYPE_BACNET_EXTENDED_DATA_EXPECTING_REPLY:
-                    //debug_print("FRAME_TYPE_BACNET_DATA_EXPECTING_REPLY");
                         if (mstp_port->DestinationAddress ==
                             MSTP_BROADCAST_ADDRESS) {
                             /* broadcast DER just remains IDLE */
@@ -1297,7 +1282,6 @@ void MSTP_Slave_Node_FSM(struct mstp_port_struct_t *mstp_port)
                 break;
             case FRAME_TYPE_BACNET_DATA_NOT_EXPECTING_REPLY:
             case FRAME_TYPE_BACNET_EXTENDED_DATA_NOT_EXPECTING_REPLY:
-            //debug_print("FRAME_TYPE_BACNET_EXTENDED_DATA_NOT_EXPECTING_REPLY:/n");
                 if ((mstp_port->DestinationAddress == MSTP_BROADCAST_ADDRESS) &&
                     (npdu_confirmed_service(
                         mstp_port->InputBuffer, mstp_port->DataLength))) {
@@ -1321,7 +1305,6 @@ void MSTP_Slave_Node_FSM(struct mstp_port_struct_t *mstp_port)
             case FRAME_TYPE_TOKEN:
             case FRAME_TYPE_POLL_FOR_MASTER:
             case FRAME_TYPE_TEST_RESPONSE:
-            //debug_print("FRAME_TYPE_TOKEN:/n");
             default:
                 break;
         }

@@ -23,8 +23,6 @@
 #include "bacnet/npdu.h"
 #include "bacnet/bacaddr.h"
 
-#include "bacnet/basic/sys/debug.h"
-
 /* the current MSTP port that the datalink is using */
 static struct mstp_port_struct_t *MSTP_Port;
 
@@ -78,6 +76,7 @@ int dlmstp_send_pdu(
             bytes_sent = pdu_len;
         }
     }
+
     return bytes_sent;
 }
 
@@ -89,10 +88,10 @@ int dlmstp_send_pdu(
  */
 uint16_t MSTP_Get_Send(struct mstp_port_struct_t *mstp_port, unsigned timeout)
 {
-    
     uint16_t pdu_len = 0;
     struct dlmstp_packet *pkt;
     struct dlmstp_user_data_t *user;
+
     (void)timeout;
     if (!mstp_port) {
         return 0;
@@ -113,6 +112,7 @@ uint16_t MSTP_Get_Send(struct mstp_port_struct_t *mstp_port, unsigned timeout)
         &pkt->pdu[0], pkt->pdu_len);
     user->Statistics.transmit_pdu_counter++;
     (void)Ringbuf_Pop(&user->PDU_Queue, NULL);
+
     return pdu_len;
 }
 
@@ -201,7 +201,6 @@ void MSTP_Send_Frame(
     if (!driver) {
         return;
     }
-    
     driver->send(buffer, nbytes);
     user->Statistics.transmit_frame_counter++;
 }
@@ -257,7 +256,6 @@ uint16_t dlmstp_receive(
     if (!driver) {
         return 0;
     }
-    
     while (!MSTP_Port->InputBuffer) {
         /* FIXME: develop configure an input buffer! */
     }
@@ -294,17 +292,8 @@ uint16_t dlmstp_receive(
         }
     }
     if (MSTP_Port->ReceivedValidFrame) {
-        //debug_printf("T ReceivedValidFrame uSec: %i", micros());
-        /*debug_printf(
-            "RX valid: state=%d type=%u src=%u dst=%u timer=%lu",
-            MSTP_Port->master_state,
-            MSTP_Port->FrameType,
-            MSTP_Port->SourceAddress,
-            MSTP_Port->DestinationAddress,
-            MSTP_Port->SilenceTimer);*/
         user->Statistics.receive_valid_frame_counter++;
         if (MSTP_Port->FrameType == FRAME_TYPE_POLL_FOR_MASTER) {
-            //debug_printf("FRAME_TYPE_POLL_FOR_MASTER");
             user->Statistics.poll_for_master_counter++;
         }
         if (user->Valid_Frame_Rx_Callback) {
@@ -315,7 +304,6 @@ uint16_t dlmstp_receive(
         }
     }
     if (MSTP_Port->ReceivedValidFrameNotForUs) {
-        //debug_print("ReceivedValidFrameNotForUs");
         user->Statistics.receive_valid_frame_not_for_us_counter++;
         if (user->Valid_Frame_Not_For_Us_Rx_Callback) {
             user->Valid_Frame_Not_For_Us_Rx_Callback(
@@ -325,14 +313,11 @@ uint16_t dlmstp_receive(
         }
     }
     if (MSTP_Port->ReceivedInvalidFrame) {
-        debug_print("ReceivedInValidFrame/n");
         user->Statistics.receive_invalid_frame_counter++;
         if (MSTP_Port->HeaderCRC != 0x55) {
             user->Statistics.bad_crc_counter++;
-            debug_print(" HeaderCRC");
         } else if (MSTP_Port->DataCRC != 0xF0B8) {
             user->Statistics.bad_crc_counter++;
-            debug_print(" DataCRC");
         }
         if (user->Invalid_Frame_Rx_Callback) {
             user->Invalid_Frame_Rx_Callback(
@@ -342,7 +327,6 @@ uint16_t dlmstp_receive(
         }
     }
     if (MSTP_Port->receive_state == MSTP_RECEIVE_STATE_IDLE) {
-        //debug_print("MSTP_RECEIVE_STATE_IDLE");
         /* only node state machines while rx is idle */
         if (MSTP_Port->SlaveNodeEnabled) {
             MSTP_Slave_Node_FSM(MSTP_Port);
@@ -350,18 +334,10 @@ uint16_t dlmstp_receive(
             (MSTP_Port->This_Station <= DEFAULT_MAX_MASTER) ||
             MSTP_Port->ZeroConfigEnabled || MSTP_Port->CheckAutoBaud) {
             master_state = MSTP_Port->master_state;
-            while (MSTP_Master_Node_FSM(MSTP_Port)) {                
+            while (MSTP_Master_Node_FSM(MSTP_Port)) {
                 if (master_state != MSTP_Port->master_state) {
                     /* state changed while some states fast transition */
                     if (MSTP_Port->master_state == MSTP_MASTER_STATE_NO_TOKEN) {
-                        debug_printf(
-                            "LOST TOKEN: state=%d timer=%lu events=%u retry=%u next=%u poll=%u",
-                            MSTP_Port->master_state,
-                            MSTP_Port->SilenceTimer((void *)MSTP_Port),
-                            MSTP_Port->EventCount,
-                            MSTP_Port->RetryCount,
-                            MSTP_Port->Next_Station,
-                            MSTP_Port->Poll_Station);
                         user->Statistics.lost_token_counter++;
                     }
                     master_state = MSTP_Port->master_state;
@@ -369,7 +345,7 @@ uint16_t dlmstp_receive(
             };
         }
     }
-/* see if there is a packet available */
+    /* see if there is a packet available */
     if (user->ReceivePacketPending) {
         user->ReceivePacketPending = false;
         user->Statistics.receive_pdu_counter++;

@@ -32,6 +32,6 @@ BACNET_STACK_EXPORT
 char *handler_dcc_password(void);
 
 #ifdef __cplusplus
-}BACNET_STACK_LIBRARY_IMPORT
+}
 #endif /* __cplusplus */
 #endif

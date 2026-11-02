@@ -30,7 +30,6 @@
 /* me! */
 #include "bacnet/basic/object/av.h"
 
-
 /* Key List for storing the object data sorted by instance number  */
 static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
 #ifdef BAC_ROUTING
@@ -981,7 +980,6 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
  */
 bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
-    bacnet_debug("Analog_Value_Write_Property");
     bool status = false; /* return value */
     int len = 0;
     float old_value = 0.0f;
@@ -1023,7 +1021,6 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     /* Command priority 6 is reserved for use by Minimum On/Off
                        algorithm and may not be used for other purposes in any
                        object. */
-                       bacnet_debug("priority error");
                     wp_data->error_class = ERROR_CLASS_PROPERTY;
                     wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
                 } else {
@@ -1040,7 +1037,6 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                                     wp_data->object_instance));
                         }
                     } else {
-                        bacnet_debug("value out of range");
                         wp_data->error_class = ERROR_CLASS_PROPERTY;
                         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
                     }

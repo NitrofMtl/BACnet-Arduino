@@ -45,7 +45,6 @@ typedef struct BACnetHostNPort {
 /* RFC 1035 255-octet total limit and 63-octet label limit
    including dots and null terminator */
 #define BACNET_HOST_NAME_MAX 255
-
 /* BACnetHostNPort with smaller RAM footprint using C datatypes */
 /*typedef struct BACnetHostNPort_Minimal {
     uint8_t tag;

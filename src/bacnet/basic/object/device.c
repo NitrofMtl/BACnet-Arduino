@@ -6,8 +6,6 @@
  * @date 2005
  * @copyright SPDX-License-Identifier: MIT
  */
-
-#include "bacnet_debug.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
