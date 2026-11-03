@@ -166,7 +166,7 @@
 #define MAX_APDU 480
 #elif defined(BACDL_MSTP) && !defined(BACNET_SECURITY)
 /* note: MS/TP extended frames can be up to 1476 bytes */
-#define MAX_APDU 480
+#define MAX_APDU 480//1476
 #elif defined(BACDL_ETHERNET) && !defined(BACNET_SECURITY)
 #define MAX_APDU 1476
 #elif defined(BACDL_ETHERNET) && defined(BACNET_SECURITY)
@@ -200,7 +200,7 @@
 /* If your device is a simple server and does not need to bind, */
 /* then you don't need to use this. */
 #if !defined(MAX_ADDRESS_CACHE)
-#define MAX_ADDRESS_CACHE 255
+#define MAX_ADDRESS_CACHE 255//4095
 #endif
 
 /* some modules have debugging enabled using PRINT_ENABLED */
