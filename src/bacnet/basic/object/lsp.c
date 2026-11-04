@@ -14,6 +14,7 @@
 /* BACnet Stack API */
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacapp.h"
+#include "bacnet/bacstr.h"
 #include "bacnet/rp.h"
 #include "bacnet/wp.h"
 #include "bacnet/basic/services.h"
@@ -32,7 +33,8 @@ struct object_data {
     BACNET_SILENCED_STATE Silenced;
     BACNET_LIFE_SAFETY_OPERATION Operation_Expected;
     uint8_t Reliability;
-    const char *Object_Name;
+    BACNET_CHARACTER_CSTRING Object_Name;
+    BACNET_CHARACTER_CSTRING Description;
     void *Context;
 };
 /* Key List for storing the object data sorted by instance number  */
@@ -56,7 +58,9 @@ static const int32_t Life_Safety_Point_Properties_Required[] = {
     PROP_OPERATION_EXPECTED, -1
 };
 
-static const int32_t Life_Safety_Point_Properties_Optional[] = { -1 };
+static const int32_t Life_Safety_Point_Properties_Optional[] = {
+    PROP_DESCRIPTION, -1
+};
 
 static const int32_t Life_Safety_Point_Properties_Proprietary[] = { -1 };
 
@@ -66,8 +70,14 @@ static const int32_t Life_Safety_Point_Properties_Proprietary[] = { -1 };
    that is always writable.  */
 static const int32_t Writable_Properties[] = {
     /* unordered list of always writable properties */
-    PROP_MODE,     PROP_PRESENT_VALUE,      PROP_OUT_OF_SERVICE,
-    PROP_SILENCED, PROP_OPERATION_EXPECTED, -1
+    PROP_MODE,
+    PROP_PRESENT_VALUE,
+    PROP_OUT_OF_SERVICE,
+    PROP_SILENCED,
+    PROP_OPERATION_EXPECTED,
+    PROP_OBJECT_NAME,
+    PROP_DESCRIPTION,
+    -1
 };
 
 /**
@@ -224,18 +234,20 @@ bool Life_Safety_Point_Object_Name(
 {
     bool status = false;
     struct object_data *pObject;
-    char name_text[32];
+    int len = 0;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (pObject->Object_Name) {
-            status =
-                characterstring_init_ansi(object_name, pObject->Object_Name);
+        if (bacnet_character_cstring_value_const(&pObject->Object_Name)) {
+            status = bacnet_character_cstring_to_characterstring(
+                object_name, &pObject->Object_Name);
         } else {
-            snprintf(
-                name_text, sizeof(name_text), "LIFE-SAFETY-POINT-%lu",
+            len = characterstring_utf8_snprintf(
+                object_name, "LIFE-SAFETY-POINT-%lu",
                 (unsigned long)object_instance);
-            status = characterstring_init_ansi(object_name, name_text);
+            if (len > 0) {
+                status = true;
+            }
         }
     }
 
@@ -243,10 +255,13 @@ bool Life_Safety_Point_Object_Name(
 }
 
 /**
- * @brief For a given object instance-number, sets the object-name
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if object-name was set
  */
 bool Life_Safety_Point_Name_Set(uint32_t object_instance, const char *new_name)
 {
@@ -255,8 +270,31 @@ bool Life_Safety_Point_Name_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        status = true;
-        pObject->Object_Name = new_name;
+        status = bacnet_character_cstring_set(&pObject->Object_Name, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the object-name
+ *  by duplicating (copying) an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if object-name was set. The object-name is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Life_Safety_Point_Name_Duplicate(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Object_Name, new_name, SIZE_MAX);
     }
 
     return status;
@@ -274,10 +312,74 @@ const char *Life_Safety_Point_Name_ASCII(uint32_t object_instance)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        name = pObject->Object_Name;
+        name = bacnet_character_cstring_value_const(&pObject->Object_Name);
     }
 
     return name;
+}
+
+/**
+ * @brief For a given object instance-number, returns the description
+ * @param object_instance - object-instance number of the object
+ * @return description text or NULL if not found
+ */
+const char *Life_Safety_Point_Description(uint32_t object_instance)
+{
+    const char *description = NULL;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        description =
+            bacnet_character_cstring_value_default(&pObject->Description, "");
+    }
+
+    return description;
+}
+
+/**
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if description was set
+ */
+bool Life_Safety_Point_Description_Set(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_set(&pObject->Description, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ *  by duplicating (copying) an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if description was set. The description is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Life_Safety_Point_Description_Duplicate(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Description, new_name, SIZE_MAX);
+    }
+
+    return status;
 }
 
 /**
@@ -502,12 +604,14 @@ int Life_Safety_Point_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     bool state = false;
     BACNET_RELIABILITY reliability = RELIABILITY_NO_FAULT_DETECTED;
     uint8_t *apdu = NULL;
+    int apdu_size = 0;
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
         return 0;
     }
     apdu = rpdata->application_data;
+    apdu_size = rpdata->application_data_len;
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -516,6 +620,13 @@ int Life_Safety_Point_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         case PROP_OBJECT_NAME:
             Life_Safety_Point_Object_Name(
                 rpdata->object_instance, &char_string);
+            apdu_len =
+                encode_application_character_string(&apdu[0], &char_string);
+            break;
+        case PROP_DESCRIPTION:
+            characterstring_init_ansi(
+                &char_string,
+                Life_Safety_Point_Description(rpdata->object_instance));
             apdu_len =
                 encode_application_character_string(&apdu[0], &char_string);
             break;
@@ -570,8 +681,14 @@ int Life_Safety_Point_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_enumerated(&apdu[0], mode);
             break;
         case PROP_ACCEPTED_MODES:
-            for (mode = 0; mode <= LIFE_SAFETY_MODE_RESERVED_MIN; mode++) {
-                len = encode_application_enumerated(&apdu[apdu_len], mode);
+            for (mode = 0; mode < LIFE_SAFETY_MODE_RESERVED_MIN; mode++) {
+                len = bacnet_enumerated_application_encode(
+                    &apdu[apdu_len], apdu_size - apdu_len, mode);
+                if (len <= 0) {
+                    rpdata->error_code =
+                        ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+                    return BACNET_STATUS_ABORT;
+                }
                 apdu_len += len;
             }
             break;
@@ -595,6 +712,60 @@ int Life_Safety_Point_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     return apdu_len;
 }
 
+static bool Life_Safety_Point_Object_Name_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Object_Name, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+static bool Life_Safety_Point_Description_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Description, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
 /* returns true if successful */
 bool Life_Safety_Point_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
@@ -602,6 +773,10 @@ bool Life_Safety_Point_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);
@@ -682,9 +857,23 @@ bool Life_Safety_Point_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
         case PROP_OBJECT_IDENTIFIER:
-        case PROP_OBJECT_NAME:
-        case PROP_DESCRIPTION:
         case PROP_OBJECT_TYPE:
+        case PROP_OBJECT_NAME:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Life_Safety_Point_Object_Name_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Life_Safety_Point_Description_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
         case PROP_TRACKING_VALUE:
         case PROP_STATUS_FLAGS:
         case PROP_EVENT_STATE:
@@ -761,7 +950,6 @@ uint32_t Life_Safety_Point_Create(uint32_t object_instance)
     if (!pObject) {
         pObject = calloc(1, sizeof(struct object_data));
         if (pObject) {
-            pObject->Object_Name = NULL;
             pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
             pObject->Mode = LIFE_SAFETY_MODE_DEFAULT;
             pObject->Present_Value = LIFE_SAFETY_STATE_QUIET;
@@ -794,6 +982,8 @@ bool Life_Safety_Point_Delete(uint32_t object_instance)
 
     pObject = Keylist_Data_Delete(Object_List, object_instance);
     if (pObject) {
+        bacnet_character_cstring_free(&pObject->Description);
+        bacnet_character_cstring_free(&pObject->Object_Name);
         free(pObject);
         status = true;
     }
@@ -820,6 +1010,8 @@ void Life_Safety_Point_Cleanup(void)
             do {
                 pObject = Keylist_Data_Pop(Object_List);
                 if (pObject) {
+                    bacnet_character_cstring_free(&pObject->Description);
+                    bacnet_character_cstring_free(&pObject->Object_Name);
                     free(pObject);
                 }
             } while (pObject);

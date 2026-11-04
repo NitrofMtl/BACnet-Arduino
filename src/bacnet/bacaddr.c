@@ -16,6 +16,7 @@
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacint.h"
 #include "bacnet/bactext.h"
+#include "bacnet/basic/sys/compare.h"
 #include "bacnet/bacaddr.h"
 
 /**
@@ -542,11 +543,12 @@ int encode_bacnet_address(uint8_t *apdu, const BACNET_ADDRESS *destination)
         }
         /* encode mac address as an octet-string */
         if (destination->len > 0) {
-            adr_len = min(destination->len, sizeof(destination->adr));
+            adr_len = BACNET_MIN(destination->len, sizeof(destination->adr));
             len = encode_application_octet_string_buffer(
                 apdu, destination->adr, adr_len);
         } else {
-            mac_len = min(destination->mac_len, sizeof(destination->mac));
+            mac_len =
+                BACNET_MIN(destination->mac_len, sizeof(destination->mac));
             len = encode_application_octet_string_buffer(
                 apdu, destination->mac, mac_len);
         }
@@ -773,6 +775,32 @@ bool bacnet_vmac_address_set(BACNET_ADDRESS *addr, uint32_t device_id)
 }
 
 /**
+ * @brief Encode the BACnetAddressBinding entry
+ * @param apdu  Pointer to the APDU, or NULL for length calculation.
+ * @param device_id  Device ID to encode.
+ * @param address  Pointer to the BACnet address to encode.
+ * @return Count of encoded bytes.
+ */
+int bacnet_address_binding_entry_encode(
+    uint8_t *apdu, uint32_t device_id, const BACNET_ADDRESS *address)
+{
+    int len = 0, apdu_len = 0;
+
+    if (!address) {
+        return 0;
+    }
+    len = encode_application_object_id(apdu, OBJECT_DEVICE, device_id);
+    apdu_len += len;
+    if (apdu) {
+        apdu += len;
+    }
+    len = encode_bacnet_address(apdu, address);
+    apdu_len += len;
+
+    return apdu_len;
+}
+
+/**
  * @brief Encode a given BACnetAddressBinding
  * @details
  *  BACnetAddressBinding ::= SEQUENCE {
@@ -785,21 +813,11 @@ bool bacnet_vmac_address_set(BACNET_ADDRESS *addr, uint32_t device_id)
 int bacnet_address_binding_type_encode(
     uint8_t *apdu, const BACNET_ADDRESS_BINDING *value)
 {
-    int apdu_len = 0, len = 0;
-
     if (!value) {
         return 0;
     }
-    len = encode_application_object_id(
-        apdu, OBJECT_DEVICE, value->device_identifier);
-    apdu_len += len;
-    if (apdu) {
-        apdu += len;
-    }
-    len = encode_bacnet_address(apdu, &value->device_address);
-    apdu_len += len;
-
-    return apdu_len;
+    return bacnet_address_binding_entry_encode(
+        apdu, value->device_identifier, &value->device_address);
 }
 
 /**

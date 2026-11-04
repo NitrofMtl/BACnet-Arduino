@@ -25,37 +25,6 @@
 #include "bacnet/get_alarm_sum.h"
 #endif
 
-typedef struct analog_value_descr {
-    unsigned Event_State : 3;
-    bool Out_Of_Service;
-    BACNET_ENGINEERING_UNITS Units;
-    float Present_Value;
-    float Prior_Value;
-    float COV_Increment;
-    bool Changed;
-    const char *Object_Name;
-    const char *Description;
-    BACNET_RELIABILITY Reliability;
-    void *Context;
-#if defined(INTRINSIC_REPORTING)
-    uint32_t Time_Delay;
-    uint32_t Notification_Class;
-    float High_Limit;
-    float Low_Limit;
-    float Deadband;
-    unsigned Limit_Enable : 2;
-    unsigned Event_Enable : 3;
-    unsigned Event_Detection_Enable : 1;
-    unsigned Notify_Type : 1;
-    ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
-    BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
-    /* time to generate event notification */
-    uint32_t Remaining_Time_Delay;
-    /* AckNotification information */
-    ACK_NOTIFICATION Ack_notify_data;
-#endif
-} ANALOG_VALUE_DESCR;
-
 /**
  * @brief Callback for gateway write present value request
  * @param  object_instance - object-instance number of the object
@@ -92,6 +61,9 @@ bool Analog_Value_Object_Name(
 BACNET_STACK_EXPORT
 bool Analog_Value_Name_Set(uint32_t object_instance, const char *new_name);
 BACNET_STACK_EXPORT
+bool Analog_Value_Name_Duplicate(
+    uint32_t object_instance, const char *new_name);
+BACNET_STACK_EXPORT
 const char *Analog_Value_Name_ASCII(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
@@ -109,6 +81,27 @@ bool Analog_Value_Present_Value_Set(
     uint32_t object_instance, float value, uint8_t priority);
 BACNET_STACK_EXPORT
 float Analog_Value_Present_Value(uint32_t object_instance);
+
+#if defined(BACNET_OBJECT_ANALOG_VALUE_COMMANDABLE)
+BACNET_STACK_EXPORT
+bool Analog_Value_Present_Value_Priority_Set(
+    uint32_t object_instance, float value, unsigned priority);
+BACNET_STACK_EXPORT
+bool Analog_Value_Present_Value_Relinquish(
+    uint32_t object_instance, unsigned priority);
+BACNET_STACK_EXPORT
+unsigned Analog_Value_Present_Value_Priority(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Analog_Value_Priority_Array_Relinquished(
+    uint32_t object_instance, unsigned priority);
+BACNET_STACK_EXPORT
+float Analog_Value_Priority_Array_Value(
+    uint32_t object_instance, unsigned priority);
+BACNET_STACK_EXPORT
+float Analog_Value_Relinquish_Default(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Analog_Value_Relinquish_Default_Set(uint32_t object_instance, float value);
+#endif
 
 BACNET_STACK_EXPORT
 unsigned Analog_Value_Event_State(uint32_t object_instance);
@@ -131,6 +124,9 @@ BACNET_STACK_EXPORT
 const char *Analog_Value_Description(uint32_t instance);
 BACNET_STACK_EXPORT
 bool Analog_Value_Description_Set(uint32_t instance, const char *new_name);
+BACNET_STACK_EXPORT
+bool Analog_Value_Description_Duplicate(
+    uint32_t object_instance, const char *new_name);
 
 BACNET_STACK_EXPORT
 BACNET_RELIABILITY Analog_Value_Reliability(uint32_t object_instance);
@@ -139,9 +135,25 @@ bool Analog_Value_Reliability_Set(
     uint32_t object_instance, BACNET_RELIABILITY value);
 
 BACNET_STACK_EXPORT
+float Analog_Value_Min_Pres_Value(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Analog_Value_Min_Pres_Value_Set(uint32_t object_instance, float value);
+BACNET_STACK_EXPORT
+float Analog_Value_Max_Pres_Value(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Analog_Value_Max_Pres_Value_Set(uint32_t object_instance, float value);
+
+BACNET_STACK_EXPORT
 BACNET_ENGINEERING_UNITS Analog_Value_Units(uint32_t instance);
 BACNET_STACK_EXPORT
 bool Analog_Value_Units_Set(uint32_t instance, BACNET_ENGINEERING_UNITS unit);
+
+BACNET_STACK_EXPORT
+bool Analog_Value_Write_Enabled(uint32_t instance);
+BACNET_STACK_EXPORT
+void Analog_Value_Write_Enable(uint32_t instance);
+BACNET_STACK_EXPORT
+void Analog_Value_Write_Disable(uint32_t instance);
 
 BACNET_STACK_EXPORT
 bool Analog_Value_Out_Of_Service(uint32_t instance);

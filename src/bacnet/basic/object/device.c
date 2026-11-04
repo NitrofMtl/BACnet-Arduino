@@ -39,7 +39,7 @@
 #include "bacnet/basic/object/ao.h"
 #include "bacnet/basic/object/av.h"
 //#include "bacnet/basic/object/alert_enrollment.h"
-//#include "bacnet/basic/object/averaging.h"
+#include "bacnet/basic/object/averaging.h"
 #include "bacnet/basic/object/auditlog.h"
 #include "bacnet/basic/object/bi.h"
 #include "bacnet/basic/object/bo.h"
@@ -94,9 +94,9 @@ static object_functions_t *Object_Table;
 
 #define DONT_USE_DEFAULT_OBJECT_TABLE
 #ifdef DONT_USE_DEFAULT_OBJECT_TABLE
-static object_functions_t My_Object_Table[] = { { 0 } };
+static object_functions_t Default_Object_Table[] = { { 0 } };
 #else //default table
-static object_functions_t My_Object_Table[] = {
+static object_functions_t Default_Object_Table[] = {
     { OBJECT_DEVICE,
       NULL /* Init - don't init Device or it will recourse! */,
       Device_Count,

@@ -204,7 +204,7 @@ int wp_decode_service_request(
         return BACNET_STATUS_ERROR;
     }
     if (wpdata) {
-        wpdata->error_code = ERROR_CODE_OTHER;
+        wpdata->error_code = ERROR_CODE_SUCCESS;
         wpdata->array_index = BACNET_ARRAY_ALL;
         wpdata->priority = BACNET_MAX_PRIORITY;
         wpdata->application_data_len = 0;
@@ -324,8 +324,7 @@ int wp_decode_service_request(
             }
         } else {
             if (wpdata) {
-                wpdata->error_code =
-                    ERROR_CODE_REJECT_MISSING_REQUIRED_PARAMETER;
+                wpdata->error_code = ERROR_CODE_REJECT_INVALID_TAG;
             }
             return BACNET_STATUS_ERROR;
         }
@@ -415,7 +414,7 @@ bool write_property_string_valid(
 
     if (value && (value->tag == BACNET_APPLICATION_TAG_CHARACTER_STRING)) {
         if (characterstring_encoding(&value->type.Character_String) ==
-            CHARACTER_ANSI_X34) {
+            CHARACTER_UTF8) {
             if (characterstring_length(&value->type.Character_String) == 0) {
                 if (wp_data) {
                     wp_data->error_class = ERROR_CLASS_PROPERTY;
@@ -474,7 +473,7 @@ bool write_property_empty_string_valid(
 
     if (value && (value->tag == BACNET_APPLICATION_TAG_CHARACTER_STRING)) {
         if (characterstring_encoding(&value->type.Character_String) ==
-            CHARACTER_ANSI_X34) {
+            CHARACTER_UTF8) {
             if ((len_max > 0) &&
                 (characterstring_length(&value->type.Character_String) >
                  len_max)) {

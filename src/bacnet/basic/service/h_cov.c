@@ -301,6 +301,44 @@ int handler_cov_encode_subscriptions(uint8_t *apdu, int apdu_size)
     return apdu_len;
 }
 
+/** Clear any subscription invoke ID that the TSM has released.
+ *  Called by the TSM each time an invoke ID is freed, so that a
+ *  subscription never holds an invoke ID that the TSM may reuse
+ *  for another transaction.
+ * @param invoke_id - the invoke ID released by the TSM
+ */
+static void cov_tsm_free_invoke_id_handler(uint8_t invoke_id)
+{
+    int index = 0;
+    BACNET_COV_HANDLER_SUBSCRIPTION *subscription = NULL;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+    uint16_t dev_id = 0;
+#endif
+
+    if (invoke_id == 0) {
+        return;
+    }
+#ifdef BAC_ROUTING
+    for (dev_id = 0; dev_id < Get_Num_Managed_Devices(); dev_id++) {
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        for (index = 0; index < Keylist_Count(COV_Subscriptions); index++) {
+            subscription = Keylist_Data_Index(COV_Subscriptions, index);
+            if (subscription && (subscription->invokeID == invoke_id)) {
+                subscription->invokeID = 0;
+            }
+        }
+#ifdef BAC_ROUTING
+    }
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
+}
+
+static struct tsm_free_invoke_id_notification COV_TSM_Free_Notification = {
+    NULL, cov_tsm_free_invoke_id_handler
+};
+
 /** Handler to initialize the COV list, clearing and disabling each entry.
  * @ingroup DSCOV
  */
@@ -310,6 +348,8 @@ void handler_cov_init(void)
 #ifdef BAC_ROUTING
     uint16_t current_dev_id = Routed_Device_Object_Index();
     uint16_t dev_id = 0;
+
+    tsm_free_invoke_id_notification_add(&COV_TSM_Free_Notification);
     for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
         Set_Routed_Device_Object_Index(dev_id);
         if (!COV_Subscriptions) {
@@ -320,6 +360,7 @@ void handler_cov_init(void)
     }
     Set_Routed_Device_Object_Index(current_dev_id);
 #else
+    tsm_free_invoke_id_notification_add(&COV_TSM_Free_Notification);
     if (!COV_Subscriptions) {
         COV_Subscriptions = Keylist_Create();
     } else {
@@ -885,18 +926,24 @@ void handler_cov_subscribe(
     if (service_len == 0) {
         len = BACNET_STATUS_REJECT;
         cov_data.error_code = ERROR_CODE_REJECT_MISSING_REQUIRED_PARAMETER;
-        debug_print("CCOV: Missing Required Parameter. Sending Reject!\n");
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr,
+            "CCOV: Missing Required Parameter. Sending Reject!\n");
         error = true;
     } else if (service_data->segmented_message) {
         /* we don't support segmentation - send an abort */
         len = BACNET_STATUS_ABORT;
-        debug_print("SubscribeCOV: Segmented message.  Sending Abort!\n");
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr,
+            "SubscribeCOV: Segmented message.  Sending Abort!\n");
         error = true;
     } else {
         len = cov_subscribe_decode_service_request(
             service_request, service_len, &cov_data);
         if (len <= 0) {
-            debug_print("SubscribeCOV: Unable to decode Request!\n");
+            debug_log_fprintf(
+                DEBUG_LOG_ERROR, stderr,
+                "SubscribeCOV: Unable to decode Request!\n");
         }
         if (len < 0) {
             error = true;
@@ -909,11 +956,14 @@ void handler_cov_subscribe(
                 apdu_len = encode_simple_ack(
                     &Handler_Transmit_Buffer[npdu_len], service_data->invoke_id,
                     SERVICE_CONFIRMED_SUBSCRIBE_COV);
-                debug_print("SubscribeCOV: Sending Simple Ack!\n");
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
+                    "SubscribeCOV: Sending Simple Ack!\n");
             } else {
                 len = BACNET_STATUS_ERROR;
                 error = true;
-                debug_print("SubscribeCOV: Sending Error!\n");
+                debug_log_fprintf(
+                    DEBUG_LOG_ERROR, stderr, "SubscribeCOV: Sending Error!\n");
             }
         }
     }
@@ -923,25 +973,29 @@ void handler_cov_subscribe(
             apdu_len = abort_encode_apdu(
                 &Handler_Transmit_Buffer[npdu_len], service_data->invoke_id,
                 abort_convert_error_code(cov_data.error_code), true);
-            debug_print("SubscribeCOV: Sending Abort!\n");
+            debug_log_fprintf(
+                DEBUG_LOG_ERROR, stderr, "SubscribeCOV: Sending Abort!\n");
         } else if (len == BACNET_STATUS_ERROR) {
             apdu_len = bacerror_encode_apdu(
                 &Handler_Transmit_Buffer[npdu_len], service_data->invoke_id,
                 SERVICE_CONFIRMED_SUBSCRIBE_COV, cov_data.error_class,
                 cov_data.error_code);
-            debug_print("SubscribeCOV: Sending Error!\n");
+            debug_log_fprintf(
+                DEBUG_LOG_ERROR, stderr, "SubscribeCOV: Sending Error!\n");
         } else if (len == BACNET_STATUS_REJECT) {
             apdu_len = reject_encode_apdu(
                 &Handler_Transmit_Buffer[npdu_len], service_data->invoke_id,
                 reject_convert_error_code(cov_data.error_code));
-            debug_print("SubscribeCOV: Sending Reject!\n");
+            debug_log_fprintf(
+                DEBUG_LOG_ERROR, stderr, "SubscribeCOV: Sending Reject!\n");
         }
     }
     pdu_len = npdu_len + apdu_len;
     bytes_sent = datalink_send_pdu(
         src, &npdu_data, &Handler_Transmit_Buffer[0], pdu_len);
     if (bytes_sent <= 0) {
-        debug_perror("SubscribeCOV: Failed to send PDU");
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr, "SubscribeCOV: Failed to send PDU\n");
     }
 
     return;

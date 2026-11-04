@@ -90,3 +90,16 @@ bool datetime_local(
     }
     return false;
 }
+
+
+/*
+ * Upstream declares this function but does not provide an implementation.
+ * The UTC offset handling is unclear in the current Arduino time port,
+ * which uses the board's local-time epoch. This is a temporary safeguard
+ * to satisfy the API without modifying the existing time handling.
+ */
+bool datetime_utc_offset_minutes_set(int16_t minutes)
+{
+    (void)minutes;
+    return false;
+}

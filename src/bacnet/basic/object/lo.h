@@ -93,6 +93,9 @@ bool Lighting_Output_Trim_Fade_Time_Set(
 BACNET_STACK_EXPORT
 bool Lighting_Output_Overridden_Set(uint32_t object_instance, float value);
 BACNET_STACK_EXPORT
+bool Lighting_Output_Overridden_Ramp(
+    uint32_t object_instance, float value, float ramp_rate);
+BACNET_STACK_EXPORT
 bool Lighting_Output_Overridden_Clear(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Lighting_Output_Overridden_Status(uint32_t object_instance);
@@ -118,12 +121,18 @@ bool Lighting_Output_Object_Name(
 BACNET_STACK_EXPORT
 bool Lighting_Output_Name_Set(uint32_t object_instance, const char *new_name);
 BACNET_STACK_EXPORT
+bool Lighting_Output_Name_Duplicate(
+    uint32_t object_instance, const char *new_name);
+BACNET_STACK_EXPORT
 const char *Lighting_Output_Name_ASCII(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
 const char *Lighting_Output_Description(uint32_t instance);
 BACNET_STACK_EXPORT
 bool Lighting_Output_Description_Set(uint32_t instance, const char *new_name);
+BACNET_STACK_EXPORT
+bool Lighting_Output_Description_Duplicate(
+    uint32_t object_instance, const char *new_name);
 
 BACNET_STACK_EXPORT
 bool Lighting_Output_Out_Of_Service(uint32_t instance);
@@ -202,6 +211,17 @@ bool Lighting_Output_Default_Priority_Set(
     uint32_t object_instance, unsigned priority);
 
 BACNET_STACK_EXPORT
+float Lighting_Output_Min_Actual_Value(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Lighting_Output_Min_Actual_Value_Set(
+    uint32_t object_instance, float value);
+BACNET_STACK_EXPORT
+float Lighting_Output_Max_Actual_Value(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Lighting_Output_Max_Actual_Value_Set(
+    uint32_t object_instance, float value);
+
+BACNET_STACK_EXPORT
 bool Lighting_Output_Color_Override(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Lighting_Output_Color_Override_Set(uint32_t object_instance, bool value);
@@ -242,6 +262,10 @@ void Lighting_Output_Timer(uint32_t object_instance, uint16_t milliseconds);
 BACNET_STACK_EXPORT
 void Lighting_Output_Write_Present_Value_Callback_Set(
     lighting_command_tracking_value_callback cb);
+
+BACNET_STACK_EXPORT
+void Lighting_Output_Write_Lighting_Command_Callback_Set(
+    lighting_command_event_callback cb);
 
 BACNET_STACK_EXPORT
 void *Lighting_Output_Context_Get(uint32_t object_instance);

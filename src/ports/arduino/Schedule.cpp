@@ -16,7 +16,7 @@ BACnetSchedule* BACnetSchedule::BS_Instances[BACNET_SCHEDULE_INSTANCES] = {};
 void (*BACnetSchedule::saveCallback)(uint32_t inst, const SchedulePersistentData &data) = nullptr;
 bool (*BACnetSchedule::restoreCallback)(uint32_t inst, SchedulePersistentData *data) = nullptr;
 
-
+/*
 BACnetSchedule::BACnetSchedule(uint8_t inst) : alarm(), instance(inst)
 {
     if (instance >= BACNET_SCHEDULE_INSTANCES) return; //dot set instance bigger than the array size
@@ -137,7 +137,7 @@ void BACnetSchedule::setDefaultEnum(uint32_t value)
     desc->Schedule_Default.type.Enumerated = value;
     desc->Present_Value = desc->Schedule_Default;
 }
-
+*/
 
 BACNET_TIME BACnetSchedule::toBACnetTime(const tmElements_t &t)
 {
@@ -177,7 +177,7 @@ tmElements_t BACnetSchedule::toTimeElements(const BACNET_DATE &date, const BACNE
     t.Second = time.sec;
     return t;
 }
-
+/*
 
 uint8_t BACnetSchedule::toBACnetScheduleDayIndex(timeDayOfWeek_t day) {
     // BACnet weekly schedule: 0=Monday ... 6=Sunday
@@ -263,9 +263,9 @@ void BACnetSchedule::recalculate_PV(uint32_t inst)
     }
 */
     // Nothing found in the last 7 days
-    memcpy(&desc->Present_Value, &desc->Schedule_Default, sizeof(desc->Present_Value));
+/*    memcpy(&desc->Present_Value, &desc->Schedule_Default, sizeof(desc->Present_Value));
 }
-
+*/
 
 
 
@@ -288,7 +288,7 @@ void BACnetSchedule::recalculate_PV(uint32_t inst)
  * @param wday - day of the week
  * @param time - time of the day
  */
-bool BACnetSchedule::Schedule_Recalculate_PV(
+/*bool BACnetSchedule::Schedule_Recalculate_PV(
     SCHEDULE_DESCR *desc, BACNET_WEEKDAY wday, const BACNET_TIME *time)
 {
     int i, current, diff;
@@ -303,7 +303,7 @@ bool BACnetSchedule::Schedule_Recalculate_PV(
 
     /*  Note to developers: please ping Edward at info@connect-ex.com
         for a more complete schedule object implementation. */
-    current = -1;
+/*    current = -1;
     tmptime = NULL;
     for (i = 0; i < desc->Weekly_Schedule[wday - 1].TV_Count; i++) {
         diff = datetime_wildcard_compare_time(
@@ -334,7 +334,7 @@ bool BACnetSchedule::Schedule_Recalculate_PV(
         /*memcpy(
             &desc->Present_Value, &desc->Schedule_Default,
             sizeof(desc->Present_Value));*/
-    }
+/*    }
 }
 
 
@@ -615,3 +615,4 @@ void BACnetSchedule::setRestoreCallback(bool (*callback)(uint32_t inst, Schedule
 {
     restoreCallback = callback;
 }
+*/

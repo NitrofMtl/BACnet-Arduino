@@ -58,10 +58,19 @@ void Notification_Class_Property_Lists(
 BACNET_STACK_EXPORT
 void Notification_Class_Writable_Property_List(
     uint32_t object_instance, const int32_t **properties);
-
+void Notification_Class_I_Am_Router_To_Network_Handler(
+    BACNET_ADDRESS *src, uint16_t network);
 BACNET_STACK_EXPORT
 void Notification_Class_Init(void);
 
+BACNET_STACK_EXPORT
+uint32_t Notification_Class_Create(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Notification_Class_Delete(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Notification_Class_Cleanup(void);
+
+BACNET_STACK_EXPORT
 bool Notification_Class_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
 unsigned Notification_Class_Count(void);

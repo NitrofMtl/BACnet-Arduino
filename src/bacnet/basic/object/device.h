@@ -178,6 +178,34 @@ typedef struct commonBacObj_s {
  *  This may be useful for implementations which manage multiple Devices,
  *  eg, a Gateway.
  */
+/* number of backup files */
+#if defined(BACNET_BACKUP_RESTORE)
+#ifndef BACNET_BACKUP_FILE_COUNT
+#define BACNET_BACKUP_FILE_COUNT 1
+#elif (BACNET_BACKUP_FILE_COUNT < 1)
+#error \
+    "BACNET_BACKUP_FILE_COUNT must be at least 1 when BACNET_BACKUP_RESTORE is enabled"
+#endif
+#endif
+
+#if defined(BAC_ROUTING) && defined(BACNET_BACKUP_RESTORE)
+typedef struct bacnet_backup_restore_data_s {
+    BACNET_BACKUP_STATE Backup_State;
+    uint16_t Backup_Failure_Timeout;
+    uint32_t Backup_Failure_Timeout_Milliseconds;
+    uint32_t Configuration_Files[BACNET_BACKUP_FILE_COUNT];
+    BACNET_TIMESTAMP Last_Restore_Time;
+    uint16_t Backup_Preparation_Time;
+    uint16_t Restore_Preparation_Time;
+    uint16_t Restore_Completion_Time;
+} BACNET_BACKUP_RESTORE_DATA;
+#endif
+
+typedef struct bacnet_device_reinitialize_data_s {
+    BACNET_REINITIALIZED_STATE State;
+    const char *Password;
+} BACNET_DEVICE_REINITIALIZE_DATA;
+
 typedef struct devObj_s {
     /** The BACnet Device Address for this device; ->len depends on DLL type. */
     BACNET_ADDRESS bacDevAddr;
@@ -191,6 +219,13 @@ typedef struct devObj_s {
     /** The upcounter that shows if the Device ID or object structure has
      * changed. */
     uint32_t Database_Revision;
+
+#if defined(BAC_ROUTING)
+    BACNET_DEVICE_REINITIALIZE_DATA Reinitialize;
+#if defined(BACNET_BACKUP_RESTORE)
+    BACNET_BACKUP_RESTORE_DATA Backup;
+#endif
+#endif
 } DEVICE_OBJECT_DATA;
 
 #ifdef __cplusplus
@@ -204,6 +239,14 @@ struct object_functions *Device_Object_Functions(void);
 BACNET_STACK_EXPORT
 struct object_functions *
 Device_Object_Functions_Find(BACNET_OBJECT_TYPE Object_Type);
+BACNET_STACK_EXPORT
+unsigned Device_Object_Functions_Count(void);
+BACNET_STACK_EXPORT
+struct object_functions *Device_Object_Functions_Index(unsigned index);
+BACNET_STACK_EXPORT
+bool Device_Object_Functions_Add(object_functions_t *element);
+BACNET_STACK_EXPORT
+void Device_Object_Functions_Init(object_functions_t *object_functions);
 
 BACNET_STACK_EXPORT
 void Device_Timer(uint16_t milliseconds);
@@ -226,7 +269,7 @@ void Device_getCurrentDateTime(BACNET_DATE_TIME *DateTime);
 BACNET_STACK_EXPORT
 int32_t Device_UTC_Offset(void);
 BACNET_STACK_EXPORT
-void Device_UTC_Offset_Set(int16_t offset);
+bool Device_UTC_Offset_Set(int16_t offset);
 
 BACNET_STACK_EXPORT
 bool Device_Daylight_Savings_Status(void);
@@ -370,7 +413,7 @@ bool Device_Object_Name_Copy(
 BACNET_STACK_EXPORT
 bool Device_Object_Name_ANSI_Init(const char *object_name);
 BACNET_STACK_EXPORT
-char *Device_Object_Name_ANSI(void);
+const char *Device_Object_Name_ANSI(void);
 
 BACNET_STACK_EXPORT
 BACNET_DEVICE_STATUS Device_System_Status(void);
@@ -502,10 +545,13 @@ uint16_t Add_Routed_Device(
     const BACNET_CHARACTER_STRING *Object_Name,
     const char *Description);
 BACNET_STACK_EXPORT
+void Routed_Device_Table_Reset(void);
+BACNET_STACK_EXPORT
 DEVICE_OBJECT_DATA *Get_Routed_Device_Object(int idx);
 BACNET_STACK_EXPORT
 BACNET_ADDRESS *Get_Routed_Device_Address(int idx);
-
+BACNET_STACK_EXPORT
+void Routed_Device_Get_My_Address(BACNET_ADDRESS *my_address);
 BACNET_STACK_EXPORT
 bool Routed_Device_Address_Lookup(
     int idx, uint8_t address_len, const uint8_t *mac_adress);

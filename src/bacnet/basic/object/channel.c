@@ -16,6 +16,7 @@
 /* BACnet Stack API */
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacapp.h"
+#include "bacnet/bacstr.h"
 #include "bacnet/wp.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/proplist.h"
@@ -31,10 +32,13 @@
 /* me! */
 #include "bacnet/basic/object/channel.h"
 
+/* maximum number of Control_Groups elements, including through resizing */
 #ifndef CONTROL_GROUPS_MAX
 #define CONTROL_GROUPS_MAX 8
 #endif
 
+/* maximum number of List_Of_Object_Property_References elements,
+   including through resizing */
 #ifndef CHANNEL_MEMBERS_MAX
 #define CHANNEL_MEMBERS_MAX 8
 #endif
@@ -44,11 +48,13 @@ struct object_data {
     BACNET_CHANNEL_VALUE Present_Value;
     unsigned Last_Priority;
     BACNET_WRITE_STATUS Write_Status;
-    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE Members[CHANNEL_MEMBERS_MAX];
+    /* keyed 0..N-1, data is BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE* */
+    OS_Keylist Members;
     uint16_t Channel_Number;
-    uint32_t Control_Groups[CONTROL_GROUPS_MAX];
-    const char *Object_Name;
-    const char *Description;
+    /* keyed 0..N-1, data is uint16_t* */
+    OS_Keylist Control_Groups;
+    BACNET_CHARACTER_CSTRING Object_Name;
+    BACNET_CHARACTER_CSTRING Description;
     void *Context;
 };
 
@@ -82,7 +88,7 @@ static const int32_t Channel_Properties_Required[] = {
     -1
 };
 
-static const int32_t Channel_Properties_Optional[] = { -1 };
+static const int32_t Channel_Properties_Optional[] = { PROP_DESCRIPTION, -1 };
 
 static const int32_t Channel_Properties_Proprietary[] = { -1 };
 
@@ -97,6 +103,8 @@ static const int32_t Writable_Properties[] = {
     PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES,
     PROP_CHANNEL_NUMBER,
     PROP_CONTROL_GROUPS,
+    PROP_OBJECT_NAME,
+    PROP_DESCRIPTION,
     -1
 };
 
@@ -377,8 +385,15 @@ static bool Channel_Reference_List_Member_Empty(
  */
 unsigned Channel_Reference_List_Member_Count(uint32_t object_instance)
 {
-    (void)object_instance;
-    return CHANNEL_MEMBERS_MAX;
+    unsigned count = 0;
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        count = (unsigned)Keylist_Count(pObject->Members);
+    }
+
+    return count;
 }
 
 /**
@@ -397,21 +412,17 @@ BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *Channel_Reference_List_Member_Element(
 
     pObject = Object_Data(object_instance);
     if (pObject && (array_index > 0)) {
-        array_index--;
-        if (array_index < CHANNEL_MEMBERS_MAX) {
-            pMember = &pObject->Members[array_index];
-        }
+        pMember = Keylist_Data_Index(pObject->Members, (int)(array_index - 1));
     }
 
     return pMember;
 }
 
 /**
- * For a given object instance-number, returns the member element
- *
+ * @brief Set a member element, or append one when index equals the count
  * @param pObject - object in which to set the value
  * @param index - 0-based array index
- * @param pMember - pointer to member value
+ * @param pMember - pointer to member value, or NULL to set it empty
  * @return true if set, false if not set
  */
 static bool List_Of_Object_Property_References_Set(
@@ -419,38 +430,82 @@ static bool List_Of_Object_Property_References_Set(
     unsigned index,
     const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember)
 {
-    bool status = false;
-    if (pObject && (index < CHANNEL_MEMBERS_MAX)) {
-        if (pMember) {
-            memcpy(
-                &pObject->Members[index], pMember,
-                sizeof(BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE));
-        } else {
-            pObject->Members[index].objectIdentifier.instance =
-                BACNET_MAX_INSTANCE;
-            pObject->Members[index].deviceIdentifier.instance =
-                BACNET_MAX_INSTANCE;
-            pObject->Members[index].objectIdentifier.type =
-                OBJECT_LIGHTING_OUTPUT;
-            pObject->Members[index].objectIdentifier.instance =
-                BACNET_MAX_INSTANCE;
-            pObject->Members[index].propertyIdentifier = PROP_PRESENT_VALUE;
-            pObject->Members[index].arrayIndex = BACNET_ARRAY_ALL;
-            pObject->Members[index].deviceIdentifier.type = OBJECT_DEVICE;
-            pObject->Members[index].deviceIdentifier.instance =
-                BACNET_MAX_INSTANCE;
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pEntry = NULL;
+    unsigned count = 0;
+
+    if (!pObject) {
+        return false;
+    }
+    count = (unsigned)Keylist_Count(pObject->Members);
+    if (index < count) {
+        pEntry = Keylist_Data_Index(pObject->Members, (int)index);
+        if (!pEntry) {
+            return false;
         }
-        status = true;
+    } else if ((index == count) && (count < CHANNEL_MEMBERS_MAX)) {
+        pEntry = calloc(1, sizeof(BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE));
+        if (!pEntry) {
+            return false;
+        }
+        if (Keylist_Data_Add(pObject->Members, (KEY)index, pEntry) < 0) {
+            free(pEntry);
+            return false;
+        }
+    } else {
+        return false;
+    }
+    if (pMember) {
+        memcpy(
+            pEntry, pMember, sizeof(BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE));
+    } else {
+        pEntry->objectIdentifier.type = OBJECT_LIGHTING_OUTPUT;
+        pEntry->objectIdentifier.instance = BACNET_MAX_INSTANCE;
+        pEntry->propertyIdentifier = PROP_PRESENT_VALUE;
+        pEntry->arrayIndex = BACNET_ARRAY_ALL;
+        pEntry->deviceIdentifier.type = OBJECT_DEVICE;
+        pEntry->deviceIdentifier.instance = BACNET_MAX_INSTANCE;
     }
 
-    return status;
+    return true;
 }
 
 /**
- * @brief For a given object instance-number, set the member element value
+ * @brief Resize the member list, growing with empty elements or
+ *  shrinking from the end
+ * @param pObject - object in which to resize the list
+ * @param array_size - new number of elements
+ * @return BACNET_ERROR_CODE value
+ */
+static BACNET_ERROR_CODE List_Of_Object_Property_References_Resize(
+    struct object_data *pObject, BACNET_UNSIGNED_INTEGER array_size)
+{
+    unsigned count = 0;
+
+    if (array_size > CHANNEL_MEMBERS_MAX) {
+        return ERROR_CODE_VALUE_OUT_OF_RANGE;
+    }
+    count = (unsigned)Keylist_Count(pObject->Members);
+    while (count > array_size) {
+        free(Keylist_Data_Pop(pObject->Members));
+        count--;
+    }
+    while (count < array_size) {
+        if (!List_Of_Object_Property_References_Set(pObject, count, NULL)) {
+            return ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+        }
+        count++;
+    }
+
+    return ERROR_CODE_SUCCESS;
+}
+
+/**
+ * @brief For a given object instance-number, set the member element value,
+ *  or append it when array_index is one more than the member count
  * @param object_instance - object-instance number of the object
  * @param array_index - 1-based array index
- * @return pointer to member element or NULL if not found
+ * @param pMember - pointer to member value, or NULL to set it empty
+ * @return true if set, false if not set
  */
 bool Channel_Reference_List_Member_Element_Set(
     uint32_t object_instance,
@@ -472,9 +527,9 @@ bool Channel_Reference_List_Member_Element_Set(
 
 /**
  * @brief For a given object instance-number, adds a member element to the
- * first empty slot
+ * first empty element, or appends it if there is no empty element
  * @param object_instance - object-instance number of the object
- * @param pMemberSrc - pointer to a object property reference element
+ * @param pNewMember - pointer to a object property reference element
  *
  * @return array_index - 1-based array index value for added element, or
  * zero if not added
@@ -486,14 +541,16 @@ unsigned Channel_Reference_List_Member_Element_Add(
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember = NULL;
     unsigned array_index = 0;
     unsigned m = 0;
+    unsigned count = 0;
     struct object_data *pObject;
 
     pObject = Object_Data(object_instance);
-    if (pObject) {
-        for (m = 0; m < CHANNEL_MEMBERS_MAX; m++) {
-            pMember = &pObject->Members[m];
+    if (pObject && pNewMember) {
+        count = (unsigned)Keylist_Count(pObject->Members);
+        for (m = 0; m < count; m++) {
+            pMember = Keylist_Data_Index(pObject->Members, (int)m);
             if (Channel_Reference_List_Member_Empty(pMember)) {
-                /* first empty slot */
+                /* first empty element */
                 array_index = 1 + m;
                 memcpy(
                     pMember, pNewMember,
@@ -501,9 +558,34 @@ unsigned Channel_Reference_List_Member_Element_Add(
                 break;
             }
         }
+        if (array_index == 0) {
+            if (List_Of_Object_Property_References_Set(
+                    pObject, count, pNewMember)) {
+                array_index = 1 + count;
+            }
+        }
     }
 
     return array_index;
+}
+
+/**
+ * @brief For a given object instance-number, determines the number of
+ *  control-groups elements
+ * @param  object_instance - object-instance number of the object
+ * @return control-groups element count
+ */
+unsigned Channel_Control_Groups_Count(uint32_t object_instance)
+{
+    unsigned count = 0;
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        count = (unsigned)Keylist_Count(pObject->Control_Groups);
+    }
+
+    return count;
 }
 
 /**
@@ -517,13 +599,14 @@ uint16_t
 Channel_Control_Groups_Element(uint32_t object_instance, int32_t array_index)
 {
     uint16_t value = 0;
+    const uint16_t *pValue;
     struct object_data *pObject;
 
     pObject = Object_Data(object_instance);
-    if (pObject) {
-        if ((array_index > 0) && (array_index <= CONTROL_GROUPS_MAX)) {
-            array_index--;
-            value = pObject->Control_Groups[array_index];
+    if (pObject && (array_index > 0)) {
+        pValue = Keylist_Data_Index(pObject->Control_Groups, array_index - 1);
+        if (pValue) {
+            value = *pValue;
         }
     }
 
@@ -531,36 +614,87 @@ Channel_Control_Groups_Element(uint32_t object_instance, int32_t array_index)
 }
 
 /**
- * @brief Write the object property member value
+ * @brief Set a control-groups element, or append one when the index
+ *  is one more than the count
+ * @param pObject - object in which to set the value
  * @param array_index - 1-based array index
  * @param value - control group value 0..65535
  *
- * @return true if parameters are value and control group is set
+ * @return true if parameters are valid and control group is set
  */
 static bool Control_Groups_Element_Set(
     struct object_data *pObject, int32_t array_index, uint16_t value)
 {
-    bool status = false;
+    uint16_t *pValue = NULL;
+    unsigned index = 0;
+    unsigned count = 0;
 
-    if (pObject) {
-        if ((array_index > 0) && (array_index <= CONTROL_GROUPS_MAX)) {
-            array_index--;
-            pObject->Control_Groups[array_index] = value;
-            status = true;
-        }
+    if (!pObject || (array_index < 1)) {
+        return false;
     }
+    index = (unsigned)(array_index - 1);
+    count = (unsigned)Keylist_Count(pObject->Control_Groups);
+    if (index < count) {
+        pValue = Keylist_Data_Index(pObject->Control_Groups, (int)index);
+        if (!pValue) {
+            return false;
+        }
+    } else if ((index == count) && (count < CONTROL_GROUPS_MAX)) {
+        pValue = calloc(1, sizeof(uint16_t));
+        if (!pValue) {
+            return false;
+        }
+        if (Keylist_Data_Add(pObject->Control_Groups, (KEY)index, pValue) < 0) {
+            free(pValue);
+            return false;
+        }
+    } else {
+        return false;
+    }
+    *pValue = value;
 
-    return status;
+    return true;
 }
 
 /**
- * For a given object instance-number, determines the Number
+ * @brief Resize the control-groups list, growing with zero elements or
+ *  shrinking from the end
+ * @param pObject - object in which to resize the list
+ * @param array_size - new number of elements
+ * @return BACNET_ERROR_CODE value
+ */
+static BACNET_ERROR_CODE Control_Groups_Resize(
+    struct object_data *pObject, BACNET_UNSIGNED_INTEGER array_size)
+{
+    unsigned count = 0;
+
+    if (array_size > CONTROL_GROUPS_MAX) {
+        return ERROR_CODE_VALUE_OUT_OF_RANGE;
+    }
+    count = (unsigned)Keylist_Count(pObject->Control_Groups);
+    while (count > array_size) {
+        free(Keylist_Data_Pop(pObject->Control_Groups));
+        count--;
+    }
+    while (count < array_size) {
+        if (!Control_Groups_Element_Set(pObject, (int32_t)(count + 1), 0)) {
+            return ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+        }
+        count++;
+    }
+
+    return ERROR_CODE_SUCCESS;
+}
+
+/**
+ * @brief For a given object instance-number, sets the control-groups value,
+ *  or appends it when array_index is one more than the element count
  *
  * @param object_instance - object-instance number of the object
  * @param array_index - 1-based array index
  * @param value - control group value 0..65535
  *
- * @return true if parameters are value and control group is set
+ * @return true if parameters are valid and control group is set
  */
 bool Channel_Control_Groups_Element_Set(
     uint32_t object_instance, int32_t array_index, uint16_t value)
@@ -594,7 +728,9 @@ static int Channel_Control_Groups_Element_Encode(
     struct object_data *pObject;
 
     pObject = Object_Data(object_instance);
-    if (pObject && (array_index < CONTROL_GROUPS_MAX)) {
+    if (pObject &&
+        (array_index <
+         (BACNET_ARRAY_INDEX)Keylist_Count(pObject->Control_Groups))) {
         value =
             Channel_Control_Groups_Element(object_instance, array_index + 1);
         apdu_len = encode_application_unsigned(apdu, value);
@@ -717,71 +853,121 @@ static bool Channel_Write_Members(
     unsigned m = 0;
     const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember = NULL;
 
-    if (pObject && value) {
-        pObject->Write_Status = BACNET_WRITE_STATUS_IN_PROGRESS;
-        debug_printf(
-            "channel[%lu].Channel_Write_Members\n",
-            (unsigned long)object_instance);
+    if (!pObject) {
+        return false;
+    }
+    if (!value) {
+        return false;
+    }
+    if (pObject->Write_Status == BACNET_WRITE_STATUS_IN_PROGRESS) {
+        return false;
+    }
+    pObject->Write_Status = BACNET_WRITE_STATUS_IN_PROGRESS;
+    debug_log_fprintf(
+        DEBUG_LOG_DEBUG, stderr, "channel[%lu].Channel_Write_Members\n",
+        (unsigned long)object_instance);
 
-        for (m = 0; m < CHANNEL_MEMBERS_MAX; m++) {
-            pMember = &pObject->Members[m];
-            /* NOTE: our implementation is for internal objects only */
-            /* NOTE: we could check to match our Device ID, but then
-               we would need to update all channels when our device ID
-               changed.  Instead, we'll just screen when members are
-               set. */
-            if ((pMember->deviceIdentifier.type == OBJECT_DEVICE) &&
-                (pMember->deviceIdentifier.instance != BACNET_MAX_INSTANCE) &&
-                (pMember->objectIdentifier.instance != BACNET_MAX_INSTANCE)) {
-                wp_data.object_type = pMember->objectIdentifier.type;
-                wp_data.object_instance = pMember->objectIdentifier.instance;
-                wp_data.object_property = pMember->propertyIdentifier;
-                wp_data.array_index = pMember->arrayIndex;
-                wp_data.error_class = ERROR_CLASS_PROPERTY;
-                wp_data.error_code = ERROR_CODE_SUCCESS;
-                wp_data.priority = priority;
-                wp_data.application_data_len = sizeof(wp_data.application_data);
-                status = Channel_Write_Member_Value(&wp_data, value);
-                if (status) {
-                    debug_printf(
-                        "channel[%lu].Channel_Write_Member[%u] coerced\n",
-                        (unsigned long)object_instance, m);
-                    if (Write_Property_Internal_Callback) {
-                        status = write_property_bacnet_array_valid(&wp_data);
+    for (m = 0; m < (unsigned)Keylist_Count(pObject->Members); m++) {
+        pMember = Keylist_Data_Index(pObject->Members, (int)m);
+        /* NOTE: our implementation is for internal objects only */
+        /* NOTE: we could check to match our Device ID, but then
+            we would need to update all channels when our device ID
+            changed.  Instead, we'll just screen when members are
+            set. */
+        if (pMember && (pMember->deviceIdentifier.type == OBJECT_DEVICE) &&
+            (pMember->deviceIdentifier.instance != BACNET_MAX_INSTANCE) &&
+            (pMember->objectIdentifier.instance != BACNET_MAX_INSTANCE)) {
+            wp_data.object_type = pMember->objectIdentifier.type;
+            wp_data.object_instance = pMember->objectIdentifier.instance;
+            wp_data.object_property = pMember->propertyIdentifier;
+            wp_data.array_index = pMember->arrayIndex;
+            wp_data.error_class = ERROR_CLASS_PROPERTY;
+            wp_data.error_code = ERROR_CODE_SUCCESS;
+            wp_data.priority = priority;
+            wp_data.application_data_len = sizeof(wp_data.application_data);
+            status = Channel_Write_Member_Value(&wp_data, value);
+            if (status) {
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
+                    "channel[%lu].Channel_Write_Member[%u] coerced\n",
+                    (unsigned long)object_instance, m);
+                if (Write_Property_Internal_Callback) {
+                    status = write_property_bacnet_array_valid(&wp_data);
+                    if (status) {
+                        status = Write_Property_Internal_Callback(&wp_data);
                         if (status) {
-                            status = Write_Property_Internal_Callback(&wp_data);
-                            if (status) {
-                                wp_data.error_code = ERROR_CODE_SUCCESS;
-                            }
+                            wp_data.error_code = ERROR_CODE_SUCCESS;
                         }
-                        debug_printf(
-                            "channel[%lu].Channel_Write_Member[%u] "
-                            "%s-%u %s %s\n",
-                            (unsigned long)object_instance, m,
-                            bactext_object_type_name(wp_data.object_type),
-                            wp_data.object_instance,
-                            bactext_property_name(wp_data.object_property),
-                            bactext_error_code_name(wp_data.error_code));
+                    }
+                    debug_log_fprintf(
+                        DEBUG_LOG_DEBUG, stderr,
+                        "channel[%lu].Channel_Write_Member[%u] "
+                        "%s-%u %s %s\n",
+                        (unsigned long)object_instance, m,
+                        bactext_object_type_name(wp_data.object_type),
+                        wp_data.object_instance,
+                        bactext_property_name(wp_data.object_property),
+                        bactext_error_code_name(wp_data.error_code));
+                    if (!status) {
+                        if ((bacnet_null_application_decode(
+                                 wp_data.application_data,
+                                 wp_data.application_data_len) > 0) &&
+                            ((wp_data.error_code ==
+                              ERROR_CODE_REJECT_INVALID_PARAMETER_DATA_TYPE) ||
+                             (wp_data.error_code ==
+                              ERROR_CODE_INVALID_DATA_TYPE))) {
+                            /* A special exception shall be the writing of
+                            a Null value. If a Null value is written and
+                            WriteProperty or WritePropertyMultiple services
+                            subsequently receive an ERROR_INVALID_DATATYPE or
+                            REJECT_INVALID_PARAMETER_DATA_TYPE,
+                            it shall not be treated as a FAILED value.
+                            This is specifically to allow Channel objects
+                            to point to both commandable and non-commandable
+                            properties with the same channel.*/
+                        } else {
+                            /* The FAILED value indicates that the Channel
+                               object has processed a property in and received
+                               an error, reject, or abort for at least one
+                               of the writes. */
+                            pObject->Write_Status = BACNET_WRITE_STATUS_FAILED;
+                        }
                     }
                 } else {
-                    wp_data.error_code = ERROR_CODE_PARAMETER_OUT_OF_RANGE;
-                    debug_printf(
-                        "channel[%lu].Channel_Write_Member[%u] "
-                        "coercion failed!\n",
-                        (unsigned long)object_instance, m);
-                    pObject->Write_Status = BACNET_WRITE_STATUS_FAILED;
+                    /* NOTE: internal callback not valid,
+                       so ignore the writes and report no error */
                 }
-                Channel_Write_Property_Notify(
-                    object_instance, status, &wp_data);
             } else {
-                debug_printf(
-                    "channel[%lu].Channel_Write_Member[%u] invalid!\n",
+                /* coercion failed */
+                wp_data.error_code = ERROR_CODE_PARAMETER_OUT_OF_RANGE;
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
+                    "channel[%lu].Channel_Write_Member[%u] "
+                    "coercion failed!\n",
                     (unsigned long)object_instance, m);
+                /* The FAILED value indicates that the Channel object
+                   has processed all of the properties in
+                   List_Of_Object_Property_References and
+                   encountered a coercion failure, or received an error,
+                   reject, or abort for at least one of the writes.*/
+                pObject->Write_Status = BACNET_WRITE_STATUS_FAILED;
             }
+            Channel_Write_Property_Notify(object_instance, status, &wp_data);
+        } else {
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr,
+                "channel[%lu].Channel_Write_Member[%u] invalid!\n",
+                (unsigned long)object_instance, m);
         }
-        if (pObject->Write_Status == BACNET_WRITE_STATUS_IN_PROGRESS) {
-            pObject->Write_Status = BACNET_WRITE_STATUS_SUCCESSFUL;
-        }
+    }
+    if (pObject->Write_Status == BACNET_WRITE_STATUS_IN_PROGRESS) {
+        /* the Write_Status property shall be set to either
+           SUCCESSFUL or FAILED. The SUCCESSFUL value indicates
+           that the Channel object has processed all of the properties
+           in List_Of_Object_Property_References and did not have
+           any coercion errors, and did not receive any errors,
+           rejects, or aborts. */
+        pObject->Write_Status = BACNET_WRITE_STATUS_SUCCESSFUL;
     }
 
     return status;
@@ -880,19 +1066,19 @@ bool Channel_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
 {
     bool status = false;
-    char name_text[32] = "CHANNEL-4194303";
     struct object_data *pObject;
+    int len = 0;
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Object_Name) {
-            status =
-                characterstring_init_ansi(object_name, pObject->Object_Name);
-        } else {
-            snprintf(
-                name_text, sizeof(name_text), "CHANNEL-%lu",
-                (unsigned long)object_instance);
-            status = characterstring_init_ansi(object_name, name_text);
+        status = bacnet_character_cstring_to_characterstring(
+            object_name, &pObject->Object_Name);
+        if (!status) {
+            len = characterstring_utf8_snprintf(
+                object_name, "CHANNEL-%lu", (unsigned long)object_instance);
+            if (len > 0) {
+                status = true;
+            }
         }
     }
 
@@ -900,12 +1086,13 @@ bool Channel_Object_Name(
 }
 
 /**
- * For a given object instance-number, sets the object-name
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- *
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if object-name was set
  */
 bool Channel_Name_Set(uint32_t object_instance, const char *new_name)
 {
@@ -914,8 +1101,30 @@ bool Channel_Name_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        status = true;
-        pObject->Object_Name = new_name;
+        status = bacnet_character_cstring_set(&pObject->Object_Name, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the object-name
+ *  by duplicating (copying) an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if object-name was set. The object-name is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Channel_Name_Duplicate(uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Object_Name, new_name, SIZE_MAX);
     }
 
     return status;
@@ -933,10 +1142,73 @@ const char *Channel_Name_ASCII(uint32_t object_instance)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        name = pObject->Object_Name;
+        name = bacnet_character_cstring_value_const(&pObject->Object_Name);
     }
 
     return name;
+}
+
+/**
+ * @brief For a given object instance-number, returns the description
+ * @param  object_instance - object-instance number of the object
+ * @return description text or NULL if not found
+ */
+const char *Channel_Description(uint32_t object_instance)
+{
+    const char *name = NULL;
+    const struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        name =
+            bacnet_character_cstring_value_default(&pObject->Description, "");
+    }
+
+    return name;
+}
+
+/**
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if description was set
+ */
+bool Channel_Description_Set(uint32_t object_instance, const char *new_name)
+{
+    bool status = false; /* return value */
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_set(&pObject->Description, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ *  by duplicating (copying) an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if description was set. The description is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Channel_Description_Duplicate(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Description, new_name, SIZE_MAX);
+    }
+
+    return status;
 }
 
 /**
@@ -1015,6 +1287,11 @@ int Channel_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             Channel_Object_Name(rpdata->object_instance, &char_string);
             apdu_len = encode_application_character_string(apdu, &char_string);
             break;
+        case PROP_DESCRIPTION:
+            characterstring_init_ansi(
+                &char_string, Channel_Description(rpdata->object_instance));
+            apdu_len = encode_application_character_string(apdu, &char_string);
+            break;
         case PROP_OBJECT_TYPE:
             apdu_len = encode_application_enumerated(apdu, OBJECT_CHANNEL);
             break;
@@ -1067,10 +1344,10 @@ int Channel_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_unsigned(apdu, unsigned_value);
             break;
         case PROP_CONTROL_GROUPS:
+            count = Channel_Control_Groups_Count(rpdata->object_instance);
             apdu_len = bacnet_array_encode(
                 rpdata->object_instance, rpdata->array_index,
-                Channel_Control_Groups_Element_Encode, CONTROL_GROUPS_MAX, apdu,
-                apdu_size);
+                Channel_Control_Groups_Element_Encode, count, apdu, apdu_size);
             if (apdu_len == BACNET_STATUS_ABORT) {
                 rpdata->error_code =
                     ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
@@ -1099,18 +1376,37 @@ int Channel_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 static int Channel_List_Of_Object_Property_References_Length(
     uint32_t object_instance, uint8_t *apdu, size_t apdu_size)
 {
-    BACNET_APPLICATION_DATA_VALUE value = { 0 };
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE value = { 0 };
     int len = 0;
     struct object_data *pObject;
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        len = bacapp_decode_known_property(
-            apdu, apdu_size, &value, OBJECT_CHANNEL,
-            PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES);
+        len = bacnet_device_object_property_reference_decode(
+            apdu, apdu_size, &value);
     }
 
     return len;
+}
+
+/**
+ * @brief For a given object instance-number and reference, determines if the
+ * reference is for a direct self present-value reference
+ * @param channel_instance [in] BACnet channel object instance number
+ * @param ref [in] BACnet device object property reference
+ * @return true if the reference is for a direct self present-value
+ */
+static bool Channel_Member_Is_Direct_Self_Present_Value(
+    uint32_t channel_instance,
+    const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *ref)
+{
+    if (!ref) {
+        return false;
+    }
+
+    return (ref->objectIdentifier.type == OBJECT_CHANNEL) &&
+        (ref->objectIdentifier.instance == channel_instance) &&
+        (ref->propertyIdentifier == PROP_PRESENT_VALUE);
 }
 
 /**
@@ -1131,7 +1427,7 @@ static BACNET_ERROR_CODE Channel_List_Of_Object_Property_References_Write(
     size_t application_data_len)
 {
     BACNET_ERROR_CODE error_code = ERROR_CODE_UNKNOWN_OBJECT;
-    BACNET_APPLICATION_DATA_VALUE value = { 0 };
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE value = { 0 };
     int len = 0;
     bool status;
     struct object_data *pObject;
@@ -1139,28 +1435,31 @@ static BACNET_ERROR_CODE Channel_List_Of_Object_Property_References_Write(
     pObject = Object_Data(object_instance);
     if (pObject) {
         if (array_index == 0) {
-            /* This array is not required to be resizable
-                through BACnet write services */
-            (void)array_size;
-            error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            /* resize, within CHANNEL_MEMBERS_MAX */
+            error_code =
+                List_Of_Object_Property_References_Resize(pObject, array_size);
+        } else if (
+            array_index > (BACNET_ARRAY_INDEX)Keylist_Count(pObject->Members)) {
+            error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
         } else {
-            len = bacapp_decode_known_property(
-                application_data, application_data_len, &value, OBJECT_CHANNEL,
-                PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES);
+            len = bacnet_device_object_property_reference_decode(
+                application_data, application_data_len, &value);
             if (len > 0) {
-                if (value.tag ==
-                    BACNET_APPLICATION_TAG_DEVICE_OBJECT_PROPERTY_REFERENCE) {
+                status = Channel_Member_Is_Direct_Self_Present_Value(
+                    object_instance, &value);
+                if (status) {
+                    error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+                } else {
                     status = List_Of_Object_Property_References_Set(
-                        pObject, array_index - 1,
-                        &value.type.Device_Object_Property_Reference);
+                        pObject, array_index - 1, &value);
                     if (status) {
                         error_code = ERROR_CODE_SUCCESS;
                     } else {
-                        error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+                        error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
                     }
-                } else {
-                    error_code = ERROR_CODE_INVALID_DATA_TYPE;
                 }
+            } else if (len == 0) {
+                error_code = ERROR_CODE_INVALID_DATA_TYPE;
             } else {
                 error_code = ERROR_CODE_ABORT_OTHER;
             }
@@ -1180,14 +1479,14 @@ static BACNET_ERROR_CODE Channel_List_Of_Object_Property_References_Write(
 static int Channel_Control_Groups_Length(
     uint32_t object_instance, uint8_t *apdu, size_t apdu_size)
 {
-    BACNET_APPLICATION_DATA_VALUE value = { 0 };
+    BACNET_UNSIGNED_INTEGER value_unsigned = 0;
     int len = 0;
     struct object_data *pObject;
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        len = bacapp_decode_known_property(
-            apdu, apdu_size, &value, OBJECT_CHANNEL, PROP_CONTROL_GROUPS);
+        len = bacnet_unsigned_application_decode(
+            apdu, apdu_size, &value_unsigned);
     }
 
     return len;
@@ -1211,7 +1510,7 @@ static BACNET_ERROR_CODE Channel_Control_Groups_Write(
     size_t application_data_len)
 {
     BACNET_ERROR_CODE error_code = ERROR_CODE_UNKNOWN_OBJECT;
-    BACNET_APPLICATION_DATA_VALUE value = { 0 };
+    BACNET_UNSIGNED_INTEGER value_unsigned = 0;
     uint16_t control_group;
     int len = 0;
     bool status;
@@ -1220,31 +1519,30 @@ static BACNET_ERROR_CODE Channel_Control_Groups_Write(
     pObject = Object_Data(object_instance);
     if (pObject) {
         if (array_index == 0) {
-            /* This array is not required to be resizable
-                through BACnet write services */
-            (void)array_size;
-            error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            /* resize, within CONTROL_GROUPS_MAX */
+            error_code = Control_Groups_Resize(pObject, array_size);
+        } else if (
+            array_index >
+            (BACNET_ARRAY_INDEX)Keylist_Count(pObject->Control_Groups)) {
+            error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
         } else {
-            len = bacapp_decode_known_property(
-                application_data, application_data_len, &value, OBJECT_CHANNEL,
-                PROP_CONTROL_GROUPS);
+            len = bacnet_unsigned_application_decode(
+                application_data, application_data_len, &value_unsigned);
             if (len > 0) {
-                if (value.tag == BACNET_APPLICATION_TAG_UNSIGNED_INT) {
-                    if (value.type.Unsigned_Int <= UINT16_MAX) {
-                        control_group = (uint16_t)value.type.Unsigned_Int;
-                        status = Control_Groups_Element_Set(
-                            pObject, array_index, control_group);
-                        if (status) {
-                            error_code = ERROR_CODE_SUCCESS;
-                        } else {
-                            error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-                        }
-                    } else {
-                        error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-                    }
+                if (value_unsigned > UINT16_MAX) {
+                    error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
                 } else {
-                    error_code = ERROR_CODE_INVALID_DATA_TYPE;
+                    control_group = (uint16_t)value_unsigned;
+                    status = Control_Groups_Element_Set(
+                        pObject, array_index, control_group);
+                    if (status) {
+                        error_code = ERROR_CODE_SUCCESS;
+                    } else {
+                        error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+                    }
                 }
+            } else if (len == 0) {
+                error_code = ERROR_CODE_INVALID_DATA_TYPE;
             } else {
                 error_code = ERROR_CODE_ABORT_OTHER;
             }
@@ -1252,6 +1550,76 @@ static BACNET_ERROR_CODE Channel_Control_Groups_Write(
     }
 
     return error_code;
+}
+
+/**
+ * For a given object instance-number, sets the object-name
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  cstring - holds the object-name to be set
+ *
+ * @return true if object-name was set
+ */
+static bool Channel_Object_Name_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Object_Name, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_RESOURCES;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, sets the description property value
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  cstring - holds the description to be set
+ *
+ * @return true if description was set
+ */
+static bool Channel_Description_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Description, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_RESOURCES;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
 }
 
 /**
@@ -1269,6 +1637,10 @@ bool Channel_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the first value of the request */
     len = bacapp_decode_known_property(
         wp_data->application_data, wp_data->application_data_len, &value,
@@ -1280,6 +1652,22 @@ bool Channel_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     switch (wp_data->object_property) {
+        case PROP_OBJECT_NAME:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Channel_Object_Name_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Channel_Description_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_CHANNEL_VALUE);
@@ -1297,14 +1685,17 @@ bool Channel_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
         case PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES:
-            wp_data->error_code = bacnet_array_write(
+            wp_data->error_code = bacnet_array_write_resizable(
                 wp_data->object_instance, wp_data->array_index,
                 Channel_List_Of_Object_Property_References_Length,
                 Channel_List_Of_Object_Property_References_Write,
-                CHANNEL_MEMBERS_MAX, wp_data->application_data,
-                wp_data->application_data_len);
+                Channel_Reference_List_Member_Count(wp_data->object_instance),
+                wp_data->application_data, wp_data->application_data_len);
             if (wp_data->error_code == ERROR_CODE_SUCCESS) {
                 status = true;
+            } else if (
+                wp_data->error_code == ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY) {
+                wp_data->error_class = ERROR_CLASS_RESOURCES;
             }
             break;
         case PROP_CHANNEL_NUMBER:
@@ -1322,13 +1713,16 @@ bool Channel_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
         case PROP_CONTROL_GROUPS:
-            wp_data->error_code = bacnet_array_write(
+            wp_data->error_code = bacnet_array_write_resizable(
                 wp_data->object_instance, wp_data->array_index,
                 Channel_Control_Groups_Length, Channel_Control_Groups_Write,
-                CONTROL_GROUPS_MAX, wp_data->application_data,
-                wp_data->application_data_len);
+                Channel_Control_Groups_Count(wp_data->object_instance),
+                wp_data->application_data, wp_data->application_data_len);
             if (wp_data->error_code == ERROR_CODE_SUCCESS) {
                 status = true;
+            } else if (
+                wp_data->error_code == ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY) {
+                wp_data->error_class = ERROR_CLASS_RESOURCES;
             }
             break;
         default:
@@ -1359,7 +1753,11 @@ void Channel_Write_Group(
     BACNET_GROUP_CHANNEL_VALUE *change_list)
 {
     struct object_data *pObject;
-    unsigned count, g, priority;
+    const uint16_t *pGroup = NULL;
+    unsigned count = 0;
+    unsigned g = 0;
+    unsigned groups = 0;
+    unsigned priority = 0;
     uint32_t instance;
     int index;
     bool status = false, found = false;
@@ -1379,11 +1777,13 @@ void Channel_Write_Group(
             continue;
         }
         instance = Channel_Index_To_Instance(index);
-        for (g = 0; g < CONTROL_GROUPS_MAX; g++) {
-            if (pObject->Control_Groups[g] == 0) {
+        groups = (unsigned)Keylist_Count(pObject->Control_Groups);
+        for (g = 0; g < groups; g++) {
+            pGroup = Keylist_Data_Index(pObject->Control_Groups, (int)g);
+            if (!pGroup || (*pGroup == 0)) {
                 continue;
             }
-            if ((pObject->Control_Groups[g] == data->group_number) &&
+            if ((*pGroup == data->group_number) &&
                 (pObject->Channel_Number == change_list->channel)) {
                 priority = change_list->overriding_priority;
                 if ((priority > BACNET_MAX_PRIORITY) ||
@@ -1403,7 +1803,8 @@ void Channel_Write_Group(
         }
     }
     if (!found) {
-        debug_printf(
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
             "Channel Objects: group_number=%u, channel=%u not found\n",
             data->group_number, change_list->channel);
     }
@@ -1494,6 +1895,24 @@ void Channel_Context_Set(uint32_t object_instance, void *context)
 }
 
 /**
+ * @brief Frees an object and all of its dynamically allocated data
+ * @param pObject - object data to free
+ */
+static void Channel_Object_Free(struct object_data *pObject)
+{
+    if (!pObject) {
+        return;
+    }
+    Keylist_Data_Free(pObject->Members);
+    Keylist_Delete(pObject->Members);
+    Keylist_Data_Free(pObject->Control_Groups);
+    Keylist_Delete(pObject->Control_Groups);
+    bacnet_character_cstring_free(&pObject->Object_Name);
+    bacnet_character_cstring_free(&pObject->Description);
+    free(pObject);
+}
+
+/**
  * @brief Creates a new object
  * @param object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
@@ -1502,7 +1921,6 @@ uint32_t Channel_Create(uint32_t object_instance)
 {
     struct object_data *pObject = NULL;
     int index = 0;
-    unsigned m, g;
 
     if (!Object_List) {
         Object_List = Keylist_Create();
@@ -1522,23 +1940,22 @@ uint32_t Channel_Create(uint32_t object_instance)
     if (!pObject) {
         pObject = calloc(1, sizeof(struct object_data));
         if (pObject) {
+            pObject->Members = Keylist_Create();
+            pObject->Control_Groups = Keylist_Create();
+            if (!pObject->Members || !pObject->Control_Groups) {
+                Channel_Object_Free(pObject);
+                return BACNET_MAX_INSTANCE;
+            }
             /* channel defaults */
-            pObject->Object_Name = NULL;
             pObject->Present_Value.tag = BACNET_APPLICATION_TAG_EMPTYLIST;
             pObject->Out_Of_Service = false;
             pObject->Last_Priority = BACNET_NO_PRIORITY;
             pObject->Write_Status = BACNET_WRITE_STATUS_IDLE;
-            for (m = 0; m < CHANNEL_MEMBERS_MAX; m++) {
-                List_Of_Object_Property_References_Set(pObject, m, NULL);
-            }
             pObject->Channel_Number = 0;
-            for (g = 0; g < CONTROL_GROUPS_MAX; g++) {
-                pObject->Control_Groups[g] = 0;
-            }
             /* add to list */
             index = Keylist_Data_Add(Object_List, object_instance, pObject);
             if (index < 0) {
-                free(pObject);
+                Channel_Object_Free(pObject);
                 return BACNET_MAX_INSTANCE;
             }
         } else {
@@ -1561,7 +1978,7 @@ bool Channel_Delete(uint32_t object_instance)
 
     pObject = Keylist_Data_Delete(Object_List, object_instance);
     if (pObject) {
-        free(pObject);
+        Channel_Object_Free(pObject);
         status = true;
     }
 
@@ -1587,7 +2004,7 @@ void Channel_Cleanup(void)
             do {
                 pObject = Keylist_Data_Pop(Object_List);
                 if (pObject) {
-                    free(pObject);
+                    Channel_Object_Free(pObject);
                 }
             } while (pObject);
             Keylist_Delete(Object_List);

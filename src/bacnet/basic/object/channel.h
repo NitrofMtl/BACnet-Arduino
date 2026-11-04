@@ -63,7 +63,16 @@ bool Channel_Object_Name(
 BACNET_STACK_EXPORT
 bool Channel_Name_Set(uint32_t object_instance, const char *new_name);
 BACNET_STACK_EXPORT
+bool Channel_Name_Duplicate(uint32_t object_instance, const char *new_name);
+BACNET_STACK_EXPORT
 const char *Channel_Name_ASCII(uint32_t object_instance);
+BACNET_STACK_EXPORT
+const char *Channel_Description(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Channel_Description_Set(uint32_t object_instance, const char *new_name);
+BACNET_STACK_EXPORT
+bool Channel_Description_Duplicate(
+    uint32_t object_instance, const char *new_name);
 
 BACNET_STACK_EXPORT
 int Channel_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
@@ -111,6 +120,8 @@ unsigned Channel_Reference_List_Member_Element_Add(
     uint32_t object_instance,
     const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMemberSrc);
 BACNET_STACK_EXPORT
+unsigned Channel_Control_Groups_Count(uint32_t object_instance);
+BACNET_STACK_EXPORT
 uint16_t
 Channel_Control_Groups_Element(uint32_t object_instance, int32_t array_index);
 BACNET_STACK_EXPORT
@@ -120,6 +131,9 @@ bool Channel_Control_Groups_Element_Set(
 BACNET_STACK_EXPORT
 bool Channel_Write_Member_Value(
     BACNET_WRITE_PROPERTY_DATA *wp_data, const BACNET_CHANNEL_VALUE *value);
+
+BACNET_STACK_EXPORT
+struct object_data *Object_Data(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
 void Channel_Write_Property_Internal_Callback_Set(write_property_function cb);

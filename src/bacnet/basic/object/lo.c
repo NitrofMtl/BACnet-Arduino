@@ -52,8 +52,8 @@ struct object_data {
     uint8_t Lighting_Command_Default_Priority;
     BACNET_OBJECT_ID Color_Reference;
     BACNET_OBJECT_ID Override_Color_Reference;
-    const char *Object_Name;
-    const char *Description;
+    BACNET_CHARACTER_CSTRING Object_Name;
+    BACNET_CHARACTER_CSTRING Description;
     void *Context;
     /* bits */
     bool Blink_Warn_Enable : 1;
@@ -70,6 +70,8 @@ static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
 /* callback for present value writes */
 static lighting_command_tracking_value_callback
     Lighting_Command_Tracking_Value_Callback;
+/* callback for lighting-command writes */
+static lighting_command_event_callback Lighting_Command_Event_Callback;
 
 /* These arrays are used by the ReadPropertyMultiple handler and
    property-list property (as of protocol-revision 14) */
@@ -106,6 +108,8 @@ static const int32_t Properties_Optional[] = {
     /* unordered list of optional properties */
     PROP_DESCRIPTION,
     PROP_TRANSITION,
+    PROP_MIN_ACTUAL_VALUE,
+    PROP_MAX_ACTUAL_VALUE,
 #if (BACNET_PROTOCOL_REVISION >= 24)
     PROP_COLOR_OVERRIDE,
     PROP_COLOR_REFERENCE,
@@ -139,7 +143,9 @@ static const int32_t Writable_Properties[] = {
     PROP_TRIM_FADE_TIME,      PROP_BLINK_WARN_ENABLE,
     PROP_EGRESS_TIME,         PROP_LIGHTING_COMMAND_DEFAULT_PRIORITY,
     PROP_FEEDBACK_VALUE,      PROP_POWER,
-    PROP_INSTANTANEOUS_POWER, -1
+    PROP_INSTANTANEOUS_POWER, PROP_MIN_ACTUAL_VALUE,
+    PROP_MAX_ACTUAL_VALUE,    PROP_OBJECT_NAME,
+    PROP_DESCRIPTION,         -1
 };
 
 /**
@@ -151,7 +157,10 @@ static const int32_t Writable_Properties[] = {
  */
 static bool is_float_equal(float x1, float x2)
 {
-    return fabs(x1 - x2) < 0.001;
+    double d1, d2;
+    d1 = (double)x1;
+    d2 = (double)x2;
+    return fabs(d1 - d2) < 0.001;
 }
 
 /**
@@ -1040,9 +1049,9 @@ bool Lighting_Output_Present_Value_Set(
             if (is_float_equal(value, BACNET_LIGHTING_SPECIAL_VALUE_WARN)) {
                 /* Provides the same functionality as the
                    WARN lighting command. */
-                debug_printf(
-                    "LO[%u]: Present-Value@%u Warn\n", object_instance,
-                    priority);
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr, "LO[%u]: Present-Value@%u Warn\n",
+                    object_instance, priority);
                 Lighting_Command_Warn(pObject, priority);
                 status = true;
             } else if (is_float_equal(
@@ -1050,7 +1059,8 @@ bool Lighting_Output_Present_Value_Set(
                            BACNET_LIGHTING_SPECIAL_VALUE_WARN_RELINQUISH)) {
                 /* Provides the same functionality as the
                    WARN_RELINQUISH lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Present-Value@%u Warn-Relinquish\n",
                     object_instance, priority);
                 Lighting_Command_Warn_Relinquish(pObject, priority);
@@ -1059,7 +1069,8 @@ bool Lighting_Output_Present_Value_Set(
                            value, BACNET_LIGHTING_SPECIAL_VALUE_WARN_OFF)) {
                 /* Provides the same functionality as the
                    WARN_OFF lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Present-Value@%u Warn-Off\n", object_instance,
                     priority);
                 Lighting_Command_Warn_Off(pObject, priority);
@@ -1069,7 +1080,8 @@ bool Lighting_Output_Present_Value_Set(
                            value, BACNET_LIGHTING_SPECIAL_VALUE_RESTORE_ON)) {
                 /* Provides the same functionality as the
                    RESTORE_ON lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Present-Value@%u Restore-On\n", object_instance,
                     priority);
                 Lighting_Command_Restore_On(pObject, priority);
@@ -1078,7 +1090,8 @@ bool Lighting_Output_Present_Value_Set(
                            value, BACNET_LIGHTING_SPECIAL_VALUE_DEFAULT_ON)) {
                 /* Provides the same functionality as the
                    DEFAULT_ON lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Present-Value@%u Default-On\n", object_instance,
                     priority);
                 Lighting_Command_Default_On(pObject, priority);
@@ -1088,7 +1101,8 @@ bool Lighting_Output_Present_Value_Set(
                            BACNET_LIGHTING_SPECIAL_VALUE_TOGGLE_RESTORE)) {
                 /* Provides the same functionality as the
                    TOGGLE_RESTORE lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Present-Value@%u Toggle-Restore\n",
                     object_instance, priority);
                 Lighting_Command_Toggle_Restore(pObject, priority);
@@ -1098,7 +1112,8 @@ bool Lighting_Output_Present_Value_Set(
                            BACNET_LIGHTING_SPECIAL_VALUE_TOGGLE_DEFAULT)) {
                 /* Provides the same functionality as the
                    TOGGLE_DEFAULT lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Present-Value@%u Toggle-Default\n",
                     object_instance, priority);
                 Lighting_Command_Toggle_Default(pObject, priority);
@@ -1106,14 +1121,15 @@ bool Lighting_Output_Present_Value_Set(
 #endif
             } else if (
                 isgreaterequal(value, 0.0) && islessequal(value, 100.0)) {
-                debug_printf(
-                    "LO[%u]: Present-Value@%u %0.2f\n", object_instance,
-                    priority, (double)value);
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr, "LO[%u]: Present-Value@%u %0.2f\n",
+                    object_instance, priority, (double)value);
                 Present_Value_Set(pObject, value, priority);
                 Lighting_Command_Transition_Default(pObject, priority, value);
                 status = true;
             } else {
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Present-Value@%u %0.2f out-of-range\n",
                     object_instance, priority, (double)value);
             }
@@ -1310,18 +1326,19 @@ bool Lighting_Output_Object_Name(
 {
     bool status = false;
     struct object_data *pObject;
-    char name_text[48] = "LIGHTING-OUTPUT-4194303";
+    int len = 0;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (pObject->Object_Name) {
-            status =
-                characterstring_init_ansi(object_name, pObject->Object_Name);
-        } else {
-            snprintf(
-                name_text, sizeof(name_text), "LIGHTING-OUTPUT-%lu",
+        status = bacnet_character_cstring_to_characterstring(
+            object_name, &pObject->Object_Name);
+        if (!status) {
+            len = characterstring_utf8_snprintf(
+                object_name, "LIGHTING-OUTPUT-%lu",
                 (unsigned long)object_instance);
-            status = characterstring_init_ansi(object_name, name_text);
+            if (len > 0) {
+                status = true;
+            }
         }
     }
 
@@ -1329,12 +1346,13 @@ bool Lighting_Output_Object_Name(
 }
 
 /**
- * For a given object instance-number, sets the object-name
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- *
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if object-name was set
  */
 bool Lighting_Output_Name_Set(uint32_t object_instance, const char *new_name)
 {
@@ -1343,8 +1361,31 @@ bool Lighting_Output_Name_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        status = true;
-        pObject->Object_Name = new_name;
+        status = bacnet_character_cstring_set(&pObject->Object_Name, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the object-name
+ *  by duplicating (copying) an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if object-name was set. The object-name is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Lighting_Output_Name_Duplicate(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Object_Name, new_name, SIZE_MAX);
     }
 
     return status;
@@ -1362,7 +1403,7 @@ const char *Lighting_Output_Name_ASCII(uint32_t object_instance)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        name = pObject->Object_Name;
+        name = bacnet_character_cstring_value_const(&pObject->Object_Name);
     }
 
     return name;
@@ -1382,23 +1423,20 @@ const char *Lighting_Output_Description(uint32_t object_instance)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (pObject->Description) {
-            name = pObject->Description;
-        } else {
-            name = "";
-        }
+        name =
+            bacnet_character_cstring_value_default(&pObject->Description, "");
     }
 
     return name;
 }
 
 /**
- * For a given object instance-number, sets the description
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- *
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if description was set
  */
 bool Lighting_Output_Description_Set(
     uint32_t object_instance, const char *new_name)
@@ -1408,8 +1446,30 @@ bool Lighting_Output_Description_Set(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        status = true;
-        pObject->Description = new_name;
+        status = bacnet_character_cstring_set(&pObject->Description, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ *  by duplicating (copying) an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if description was set. The description is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Lighting_Output_Description_Duplicate(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Description, new_name, SIZE_MAX);
     }
 
     return status;
@@ -1451,6 +1511,78 @@ Lighting_Command_Stop(struct object_data *pObject, unsigned priority)
             lighting_command_stop(&pObject->Lighting_Command);
         }
     }
+}
+
+/**
+ * For a given object instance-number, sets the object-name
+ *
+ * @param  wp_data - WriteProperty data containing the object instance
+ *  and target value.
+ * @param  cstring - holds the object-name to be set
+ *
+ * @return true if object-name was set
+ */
+static bool Lighting_Output_Object_Name_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Object_Name, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, sets the description property value
+ *
+ * @param  wp_data - WriteProperty data containing the object instance
+ *  and target value.
+ * @param  cstring - holds the description to be set
+ *
+ * @return true if description was set
+ */
+static bool Lighting_Output_Description_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Description, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
 }
 
 /**
@@ -1549,8 +1681,9 @@ bool Lighting_Output_Lighting_Command_Set(
         } else {
             priority = pObject->Lighting_Command_Default_Priority;
         }
-        debug_printf(
-            "LO[%u]: Lighting-Command@%u: %s\n", object_instance, priority,
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr, "LO[%u]: Lighting-Command@%u: %s\n",
+            object_instance, priority,
             bactext_lighting_operation_name(value->operation));
         switch (value->operation) {
             case BACNET_LIGHTS_NONE:
@@ -1566,7 +1699,8 @@ bool Lighting_Output_Lighting_Command_Set(
                 } else {
                     fade_time = pObject->Default_Fade_Time;
                 }
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Fade-To "
                     "Target=%f Fade=%u\n",
                     object_instance, priority, (double)value->target_level,
@@ -1585,7 +1719,8 @@ bool Lighting_Output_Lighting_Command_Set(
                 } else {
                     ramp_rate = pObject->Default_Ramp_Rate;
                 }
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Ramp-To "
                     "Target=%f Ramp-Rate=%f\n",
                     object_instance, priority, (double)value->target_level,
@@ -1601,7 +1736,8 @@ bool Lighting_Output_Lighting_Command_Set(
                 } else {
                     step_increment = pObject->Default_Step_Increment;
                 }
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Step "
                     "Step-Increment=%f\n",
                     object_instance, priority, (double)step_increment);
@@ -1616,7 +1752,8 @@ bool Lighting_Output_Lighting_Command_Set(
                 } else {
                     step_increment = pObject->Default_Step_Increment;
                 }
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Step "
                     "Step-Increment=%f\n",
                     object_instance, priority, (double)step_increment);
@@ -1627,7 +1764,8 @@ bool Lighting_Output_Lighting_Command_Set(
             case BACNET_LIGHTS_WARN:
                 /* Provides the same functionality as the
                    WARN lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Warn\n", object_instance,
                     priority);
                 Lighting_Command_Warn(pObject, priority);
@@ -1636,7 +1774,8 @@ bool Lighting_Output_Lighting_Command_Set(
             case BACNET_LIGHTS_WARN_OFF:
                 /* Provides the same functionality as the
                    WARN_OFF lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Warn-Off\n", object_instance,
                     priority);
                 Lighting_Command_Warn_Off(pObject, priority);
@@ -1645,14 +1784,16 @@ bool Lighting_Output_Lighting_Command_Set(
             case BACNET_LIGHTS_WARN_RELINQUISH:
                 /* Provides the same functionality as the
                    WARN_RELINQUISH lighting command. */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Warn-Relinquish\n",
                     object_instance, priority);
                 Lighting_Command_Warn_Relinquish(pObject, priority);
                 status = true;
                 break;
             case BACNET_LIGHTS_STOP:
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Stop\n", object_instance,
                     priority);
                 Lighting_Command_Stop(pObject, priority);
@@ -1660,28 +1801,32 @@ bool Lighting_Output_Lighting_Command_Set(
                 break;
 #if (BACNET_PROTOCOL_REVISION >= 28)
             case BACNET_LIGHTS_RESTORE_ON:
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Restore-On\n", object_instance,
                     priority);
                 Lighting_Command_Restore_On(pObject, priority);
                 status = true;
                 break;
             case BACNET_LIGHTS_DEFAULT_ON:
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Default-On\n", object_instance,
                     priority);
                 Lighting_Command_Default_On(pObject, priority);
                 status = true;
                 break;
             case BACNET_LIGHTS_TOGGLE_RESTORE:
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Toggle-Restore\n",
                     object_instance, priority);
                 Lighting_Command_Toggle_Restore(pObject, priority);
                 status = true;
                 break;
             case BACNET_LIGHTS_TOGGLE_DEFAULT:
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u Toggle-Default\n",
                     object_instance, priority);
                 Lighting_Command_Toggle_Default(pObject, priority);
@@ -1689,7 +1834,8 @@ bool Lighting_Output_Lighting_Command_Set(
                 break;
 #endif
             default:
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "LO[%u]: Lighting-Command@%u %u out-of-range\n",
                     object_instance, priority, value->operation);
                 break;
@@ -2290,6 +2436,176 @@ unsigned Lighting_Output_Default_Priority(uint32_t object_instance)
 }
 
 /**
+ * @brief For a given object instance-number, gets the minimum-actual-value
+ * property value
+ * @param object_instance - object-instance number of the object
+ * @return the minimum-actual-value property value of this object
+ */
+float Lighting_Output_Min_Actual_Value(uint32_t object_instance)
+{
+    float value = 0.0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value =
+            lighting_command_min_actual_value_get(&pObject->Lighting_Command);
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the minimum-actual-value
+ * property value
+ * @param object_instance - object-instance number of the object
+ * @param value - the minimum-actual-value property value to be set
+ * @return true if the minimum-actual-value property value was set
+ */
+bool Lighting_Output_Min_Actual_Value_Set(uint32_t object_instance, float value)
+{
+    bool status = false;
+    struct object_data *pObject;
+    float max_actual_value;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (isgreaterequal(value, 1.0f) && islessequal(value, 100.0f)) {
+            /* Min_Actual_Value shall always be a positive number
+               in the range 1.0% to 100.0%.*/
+            max_actual_value = lighting_command_max_actual_value_get(
+                &pObject->Lighting_Command);
+            if (value > max_actual_value) {
+                /* Changing Min_Actual_Value to a value greater than
+                Max_Actual_Value shall force Max_Actual_Value
+                to become equal to Min_Actual_Value. */
+                value = max_actual_value;
+            }
+            lighting_command_min_actual_value_set(
+                &pObject->Lighting_Command, value);
+            status = true;
+        }
+    }
+
+    return status;
+}
+
+/**
+ * Handle a WriteProperty to a specific property.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - property value to be written
+ * @param  priority - priority-array index value 1..16
+ * @param  error_class - the BACnet error class
+ * @param  error_code - BACnet Error code
+ *
+ * @return  true if values are within range and present-value is set.
+ */
+static bool Lighting_Output_Min_Actual_Value_Write(
+    uint32_t object_instance,
+    float value,
+    uint8_t priority,
+    BACNET_ERROR_CLASS *error_class,
+    BACNET_ERROR_CODE *error_code)
+{
+    bool status = false;
+    (void)priority;
+    status = Lighting_Output_Min_Actual_Value_Set(object_instance, value);
+    if (!status) {
+        *error_class = ERROR_CLASS_PROPERTY;
+        *error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, gets the maximum-actual-value
+ * property value
+ * @param object_instance - object-instance number of the object
+ * @return the maximum-actual-value property value of this object
+ */
+float Lighting_Output_Max_Actual_Value(uint32_t object_instance)
+{
+    float value = 0.0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value =
+            lighting_command_max_actual_value_get(&pObject->Lighting_Command);
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the maximum-actual-value
+ * property value
+ * @param object_instance - object-instance number of the object
+ * @param value - the maximum-actual-value property value to be set
+ * @return true if the maximum-actual-value property value was set
+ */
+bool Lighting_Output_Max_Actual_Value_Set(uint32_t object_instance, float value)
+{
+    bool status = false;
+    struct object_data *pObject;
+    float min_actual_value;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (isgreaterequal(value, 1.0f) && islessequal(value, 100.0f)) {
+            /* Max_Actual_Value shall always be a positive number
+               in the range 1.0% to 100.0%.*/
+            min_actual_value = lighting_command_min_actual_value_get(
+                &pObject->Lighting_Command);
+            if (value < min_actual_value) {
+                /* Changing Max_Actual_Value to a value less than
+                   Min_Actual_Value shall force Min_Actual_Value
+                   to become equal to Max_Actual_Value. */
+                lighting_command_min_actual_value_set(
+                    &pObject->Lighting_Command, value);
+            }
+            lighting_command_max_actual_value_set(
+                &pObject->Lighting_Command, value);
+            status = true;
+        }
+    }
+
+    return status;
+}
+
+/**
+ * Handle a WriteProperty to a specific property.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - property value to be written
+ * @param  priority - priority-array index value 1..16
+ * @param  error_class - the BACnet error class
+ * @param  error_code - BACnet Error code
+ *
+ * @return  true if values are within range and present-value is set.
+ */
+static bool Lighting_Output_Max_Actual_Value_Write(
+    uint32_t object_instance,
+    float value,
+    uint8_t priority,
+    BACNET_ERROR_CLASS *error_class,
+    BACNET_ERROR_CODE *error_code)
+{
+    bool status = false;
+
+    (void)priority;
+    status = Lighting_Output_Max_Actual_Value_Set(object_instance, value);
+    if (!status) {
+        *error_class = ERROR_CLASS_PROPERTY;
+        *error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+    }
+
+    return status;
+}
+
+/**
  * For a given object instance-number, sets the
  * lighting-command-default-priority property value of the object.
  *
@@ -2798,7 +3114,8 @@ static bool Lighting_Output_Trim_Fade_Time_Write(
     bool status;
 
     (void)priority;
-    status = Lighting_Output_Trim_Fade_Time_Set(object_instance, value);
+    status =
+        Lighting_Output_Trim_Fade_Time_Set(object_instance, (uint32_t)value);
     if (!status) {
         *error_class = ERROR_CLASS_PROPERTY;
         *error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
@@ -2824,6 +3141,32 @@ bool Lighting_Output_Overridden_Set(uint32_t object_instance, float value)
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         lighting_command_override_set(&pObject->Lighting_Command, value);
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief Set the overridden state of the lighting output and ramp to a value
+ * @note For HOA (hand off-auto) control where the override
+ * is permanent and prevents lighting-command or present-value
+ * control of the output.
+ * @param object_instance [in] BACnet object instance
+ * @param value [in] new value to set
+ * @param ramp_rate [in] ramp rate to apply
+ * @return true if successful, false if not
+ */
+bool Lighting_Output_Overridden_Ramp(
+    uint32_t object_instance, float value, float ramp_rate)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        lighting_command_override_ramp(
+            &pObject->Lighting_Command, value, ramp_rate);
         status = true;
     }
 
@@ -3387,6 +3730,16 @@ int Lighting_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_enumerated(
                 apdu, Lighting_Output_Transition(rpdata->object_instance));
             break;
+        case PROP_MIN_ACTUAL_VALUE:
+            real_value =
+                Lighting_Output_Min_Actual_Value(rpdata->object_instance);
+            apdu_len = encode_application_real(&apdu[0], real_value);
+            break;
+        case PROP_MAX_ACTUAL_VALUE:
+            real_value =
+                Lighting_Output_Max_Actual_Value(rpdata->object_instance);
+            apdu_len = encode_application_real(&apdu[0], real_value);
+            break;
         case PROP_PRIORITY_ARRAY:
             apdu_len = bacnet_array_encode(
                 rpdata->object_instance, rpdata->array_index,
@@ -3503,6 +3856,10 @@ bool Lighting_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_known_property(
         wp_data->application_data, wp_data->application_data_len, &value,
@@ -3532,6 +3889,22 @@ bool Lighting_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         wp_data->object_instance, wp_data->priority,
                         &wp_data->error_class, &wp_data->error_code);
                 }
+            }
+            break;
+        case PROP_OBJECT_NAME:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Lighting_Output_Object_Name_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Lighting_Output_Description_Write(
+                    wp_data, &value.type.Character_String);
             }
             break;
         case PROP_LIGHTING_COMMAND:
@@ -3587,6 +3960,26 @@ bool Lighting_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 status = Lighting_Output_Transition_Write(
                     wp_data->object_instance, value.type.Enumerated,
+                    wp_data->priority, &wp_data->error_class,
+                    &wp_data->error_code);
+            }
+            break;
+        case PROP_MIN_ACTUAL_VALUE:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                status = Lighting_Output_Min_Actual_Value_Write(
+                    wp_data->object_instance, value.type.Real,
+                    wp_data->priority, &wp_data->error_class,
+                    &wp_data->error_code);
+            }
+            break;
+        case PROP_MAX_ACTUAL_VALUE:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                status = Lighting_Output_Max_Actual_Value_Write(
+                    wp_data->object_instance, value.type.Real,
                     wp_data->priority, &wp_data->error_class,
                     &wp_data->error_code);
             }
@@ -3762,6 +4155,42 @@ void Lighting_Output_Write_Present_Value_Callback_Set(
 }
 
 /**
+ * @brief Callback for lighting command event notifications
+ * @param  object_instance - object-instance number of the object
+ * @param  operation - BACnet lighting operation
+ * @param  target_value - operation target value (e.g., value for fade/ramp,
+ * step increment for step operations, interval for WARN operations)
+ * @param  modifier_value - operation modifier value (e.g., ramp rate for ramp,
+ * fade time for fade, duration for WARN operations)
+ */
+static void Lighting_Output_Lighting_Command_Callback(
+    uint32_t object_instance,
+    BACNET_LIGHTING_OPERATION operation,
+    float target_value,
+    float modifier_value)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (Lighting_Command_Event_Callback) {
+            Lighting_Command_Event_Callback(
+                object_instance, operation, target_value, modifier_value);
+        }
+    }
+}
+
+/**
+ * @brief Sets a callback used when lighting-command is written from BACnet
+ * @param cb - callback used to provide indications
+ */
+void Lighting_Output_Write_Lighting_Command_Callback_Set(
+    lighting_command_event_callback cb)
+{
+    Lighting_Command_Event_Callback = cb;
+}
+
+/**
  * @brief Set the context used with a specific object instance
  * @param object_instance [in] BACnet object instance number
  * @param context [in] pointer to the context
@@ -3842,14 +4271,15 @@ uint32_t Lighting_Output_Create(uint32_t object_instance)
         if (!pObject) {
             return BACNET_MAX_INSTANCE;
         }
-        pObject->Object_Name = NULL;
-        pObject->Description = NULL;
         pObject->Present_Value = 0.0f;
         lighting_command_init(&pObject->Lighting_Command);
         lighting_command_key_set(&pObject->Lighting_Command, object_instance);
         lighting_command_tracking_value_callback_set(
             &pObject->Lighting_Command,
             Lighting_Output_Tracking_Value_Callback);
+        lighting_command_event_callback_set(
+            &pObject->Lighting_Command,
+            Lighting_Output_Lighting_Command_Callback);
         pObject->Last_Lighting_Command.operation = BACNET_LIGHTS_NONE;
         pObject->Last_Lighting_Command.use_target_level = false;
         pObject->Last_Lighting_Command.use_ramp_rate = false;
@@ -3905,6 +4335,8 @@ bool Lighting_Output_Delete(uint32_t object_instance)
 
     pObject = Keylist_Data_Delete(Object_List, object_instance);
     if (pObject) {
+        bacnet_character_cstring_free(&pObject->Object_Name);
+        bacnet_character_cstring_free(&pObject->Description);
         free(pObject);
         status = true;
     }
@@ -3931,6 +4363,8 @@ void Lighting_Output_Cleanup(void)
             do {
                 pObject = Keylist_Data_Pop(Object_List);
                 if (pObject) {
+                    bacnet_character_cstring_free(&pObject->Object_Name);
+                    bacnet_character_cstring_free(&pObject->Description);
                     free(pObject);
                 }
             } while (pObject);

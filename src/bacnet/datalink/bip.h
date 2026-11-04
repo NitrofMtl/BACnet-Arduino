@@ -30,7 +30,7 @@ extern "C" {
 /* on Linux, ifname is eth0, ath0, arc0, and others.
    on Windows, ifname is the dotted ip address of the interface */
 BACNET_STACK_EXPORT
-bool bip_init(char *ifname);
+bool bip_init(const char *ifname);
 
 BACNET_STACK_EXPORT
 void bip_set_interface(const char *ifname);
@@ -98,6 +98,9 @@ bool bip_set_broadcast_addr(const BACNET_IP_ADDRESS *addr);
 
 BACNET_STACK_EXPORT
 bool bip_get_broadcast_addr(BACNET_IP_ADDRESS *addr);
+
+BACNET_STACK_EXPORT
+bool bip_get_gateway_addr(BACNET_IP_ADDRESS *addr);
 
 BACNET_STACK_EXPORT
 bool bip_set_subnet_prefix(uint8_t prefix);

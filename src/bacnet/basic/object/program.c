@@ -45,9 +45,9 @@ struct object_data {
     BACNET_PROGRAM_ERROR Reason_For_Halt;
     const char *Description_Of_Halt;
     const char *Program_Location;
-    const char *Instance_Of;
-    const char *Description;
-    const char *Object_Name;
+    BACNET_CHARACTER_CSTRING Instance_Of;
+    BACNET_CHARACTER_CSTRING Description;
+    BACNET_CHARACTER_CSTRING Object_Name;
     BACNET_RELIABILITY Reliability;
     bool Out_Of_Service : 1;
     bool Changed : 1;
@@ -88,7 +88,8 @@ static const int32_t Properties_Proprietary[] = { -1 };
    that is always writable.  */
 static const int32_t Writable_Properties[] = {
     /* unordered list of always writable properties */
-    PROP_PROGRAM_CHANGE, PROP_OUT_OF_SERVICE, -1
+    PROP_PROGRAM_CHANGE, PROP_OUT_OF_SERVICE, PROP_OBJECT_NAME,
+    PROP_DESCRIPTION,    PROP_INSTANCE_OF,    -1
 };
 
 /**
@@ -254,20 +255,20 @@ bool Program_State_Set(uint32_t object_instance, BACNET_PROGRAM_STATE value)
 bool Program_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
 {
-    char text[32] = "";
     bool status = false;
     struct object_data *pObject;
+    int len = 0;
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Object_Name) {
-            status =
-                characterstring_init_ansi(object_name, pObject->Object_Name);
-        } else {
-            snprintf(
-                text, sizeof(text), "PROGRAM-%lu",
-                (unsigned long)object_instance);
-            status = characterstring_init_ansi(object_name, text);
+        status = bacnet_character_cstring_to_characterstring(
+            object_name, &pObject->Object_Name);
+        if (!status) {
+            len = characterstring_utf8_snprintf(
+                object_name, "PROGRAM-%lu", (unsigned long)object_instance);
+            if (len > 0) {
+                status = true;
+            }
         }
     }
 
@@ -275,10 +276,13 @@ bool Program_Object_Name(
 }
 
 /**
- * @brief For a given object instance-number, sets the object-name
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if object-name was set
  */
 bool Program_Name_Set(uint32_t object_instance, const char *new_name)
 {
@@ -287,8 +291,30 @@ bool Program_Name_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        status = true;
-        pObject->Object_Name = new_name;
+        status = bacnet_character_cstring_set(&pObject->Object_Name, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the object-name
+ *  by duplicating (copying) an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if object-name was set. The object-name is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Program_Name_Duplicate(uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Object_Name, new_name, SIZE_MAX);
     }
 
     return status;
@@ -306,7 +332,7 @@ const char *Program_Name_ASCII(uint32_t object_instance)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        name = pObject->Object_Name;
+        name = bacnet_character_cstring_value_const(&pObject->Object_Name);
     }
 
     return name;
@@ -326,10 +352,9 @@ bool Program_Description(
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Description) {
-            status =
-                characterstring_init_ansi(description, pObject->Description);
-        } else {
+        status = bacnet_character_cstring_to_characterstring(
+            description, &pObject->Description);
+        if (!status) {
             status = characterstring_init_ansi(description, "");
         }
     }
@@ -338,10 +363,12 @@ bool Program_Description(
 }
 
 /**
- * @brief For a given object instance-number, sets the description
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- * @return  true if string was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if description was set
  */
 bool Program_Description_Set(uint32_t object_instance, const char *new_name)
 {
@@ -350,8 +377,30 @@ bool Program_Description_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        status = true;
-        pObject->Description = new_name;
+        status = bacnet_character_cstring_set(&pObject->Description, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ *  by duplicating (copying) an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if description was set. The description is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Program_Description_Duplicate(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Description, new_name, SIZE_MAX);
     }
 
     return status;
@@ -369,11 +418,8 @@ const char *Program_Description_ANSI(uint32_t object_instance)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Description == NULL) {
-            name = "";
-        } else {
-            name = pObject->Description;
-        }
+        name =
+            bacnet_character_cstring_value_default(&pObject->Description, "");
     }
 
     return name;
@@ -534,10 +580,9 @@ bool Program_Instance_Of(
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Instance_Of) {
-            status =
-                characterstring_init_ansi(description, pObject->Instance_Of);
-        } else {
+        status = bacnet_character_cstring_to_characterstring(
+            description, &pObject->Instance_Of);
+        if (!status) {
             status = characterstring_init_ansi(description, "");
         }
     }
@@ -546,10 +591,12 @@ bool Program_Instance_Of(
 }
 
 /**
- * @brief For a given object instance-number, sets the Instance_Of
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- * @return  true if string was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if instance-of was set
  */
 bool Program_Instance_Of_Set(uint32_t object_instance, const char *new_name)
 {
@@ -558,8 +605,7 @@ bool Program_Instance_Of_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        status = true;
-        pObject->Instance_Of = new_name;
+        status = bacnet_character_cstring_set(&pObject->Instance_Of, new_name);
     }
 
     return status;
@@ -577,11 +623,8 @@ const char *Program_Instance_Of_ANSI(uint32_t object_instance)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Instance_Of == NULL) {
-            name = "";
-        } else {
-            name = pObject->Instance_Of;
-        }
+        name =
+            bacnet_character_cstring_value_default(&pObject->Instance_Of, "");
     }
 
     return name;
@@ -649,6 +692,113 @@ bool Program_Change_Set(
  * @param error_class - BACNET_ERROR_CLASS
  * @param error_code - BACNET_ERROR_CODE
  * @return true if the program change property value was written
+ */
+/**
+ * @brief Writes a Program object name property value.
+ * @param wp_data Pointer to the write-property request data.
+ * @param cstring BACnet character string to store as the object name.
+ * @return true if the write succeeded.
+ */
+static bool Program_Object_Name_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Object_Name, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * @brief Writes a Program object description property value.
+ * @param wp_data Pointer to the write-property request data.
+ * @param cstring BACnet character string to store as the description.
+ * @return true if the write succeeded.
+ */
+static bool Program_Description_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Description, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * @brief Writes a Program object instance-of property value.
+ * @param wp_data Pointer to the write-property request data.
+ * @param cstring BACnet character string to store as the instance-of value.
+ * @return true if the write succeeded.
+ */
+static bool Program_Instance_Of_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Instance_Of, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * @brief Writes a Program object program-change property value.
+ * @param object_instance BACnet object instance number.
+ * @param program_change BACnet program change value to write.
+ * @param error_class Pointer to BACnet error class to set on failure.
+ * @param error_code Pointer to BACnet error code to set on failure.
+ * @return true if the write succeeded.
  */
 static bool Program_Change_Write(
     uint32_t object_instance,
@@ -937,6 +1087,10 @@ bool Program_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);
@@ -963,6 +1117,30 @@ bool Program_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 Program_Out_Of_Service_Set(
                     wp_data->object_instance, value.type.Boolean);
+            }
+            break;
+        case PROP_OBJECT_NAME:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Program_Object_Name_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Program_Description_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
+        case PROP_INSTANCE_OF:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Program_Instance_Of_Write(
+                    wp_data, &value.type.Character_String);
             }
             break;
         default:
@@ -1391,9 +1569,6 @@ uint32_t Program_Create(uint32_t object_instance)
     pObject->Reason_For_Halt = PROGRAM_ERROR_NORMAL;
     pObject->Description_Of_Halt = NULL;
     pObject->Program_Location = NULL;
-    pObject->Instance_Of = NULL;
-    pObject->Description = NULL;
-    pObject->Object_Name = NULL;
     pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
     pObject->Out_Of_Service = false;
     pObject->Context = NULL;
@@ -1418,6 +1593,9 @@ bool Program_Delete(uint32_t object_instance)
         Keylist_Data_Delete(Object_List, object_instance);
 
     if (pObject) {
+        bacnet_character_cstring_free(&pObject->Instance_Of);
+        bacnet_character_cstring_free(&pObject->Description);
+        bacnet_character_cstring_free(&pObject->Object_Name);
         free(pObject);
         status = true;
     }
@@ -1444,6 +1622,9 @@ void Program_Cleanup(void)
             do {
                 pObject = Keylist_Data_Pop(Object_List);
                 if (pObject) {
+                    bacnet_character_cstring_free(&pObject->Instance_Of);
+                    bacnet_character_cstring_free(&pObject->Description);
+                    bacnet_character_cstring_free(&pObject->Object_Name);
                     free(pObject);
                 }
             } while (pObject);

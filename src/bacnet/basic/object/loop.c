@@ -21,6 +21,7 @@
 /* BACnet Stack API */
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacapp.h"
+#include "bacnet/bacstr.h"
 #include "bacnet/bactext.h"
 #include "bacnet/datetime.h"
 #include "bacnet/proplist.h"
@@ -45,6 +46,7 @@ static const BACNET_OBJECT_TYPE Object_Type = OBJECT_LOOP;
 /* handling for manipulated and reference properties */
 static write_property_function Write_Property_Internal_Callback;
 static read_property_function Read_Property_Internal_Callback;
+static uint8_t Read_Property_Buffer[MAX_APDU];
 /* Write Property notification callbacks for logging or other purposes */
 static struct loop_write_property_notification Write_Property_Notification_Head;
 
@@ -75,8 +77,8 @@ struct object_data {
     float Minimum_Output;
     float COV_Increment;
     uint8_t Priority_For_Writing;
-    const char *Description;
-    const char *Object_Name;
+    BACNET_CHARACTER_CSTRING Description;
+    BACNET_CHARACTER_CSTRING Object_Name;
     BACNET_RELIABILITY Reliability;
     bool Out_Of_Service : 1;
     bool Changed : 1;
@@ -153,6 +155,8 @@ static const int32_t Writable_Properties[] = {
     PROP_CONTROLLED_VARIABLE_REFERENCE,
     PROP_SETPOINT_REFERENCE,
     PROP_COV_INCREMENT,
+    PROP_OBJECT_NAME,
+    PROP_DESCRIPTION,
     -1
 };
 
@@ -293,19 +297,20 @@ unsigned Loop_Instance_To_Index(uint32_t object_instance)
 bool Loop_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
 {
-    char text[32] = "";
     bool status = false;
     struct object_data *pObject;
+    int len = 0;
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Object_Name) {
-            status =
-                characterstring_init_ansi(object_name, pObject->Object_Name);
-        } else {
-            snprintf(
-                text, sizeof(text), "LOOP-%lu", (unsigned long)object_instance);
-            status = characterstring_init_ansi(object_name, text);
+        status = bacnet_character_cstring_to_characterstring(
+            object_name, &pObject->Object_Name);
+        if (!status) {
+            len = characterstring_utf8_snprintf(
+                object_name, "LOOP-%lu", (unsigned long)object_instance);
+            if (len > 0) {
+                status = true;
+            }
         }
     }
 
@@ -313,10 +318,13 @@ bool Loop_Object_Name(
 }
 
 /**
- * @brief For a given object instance-number, sets the object-name
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if object-name was set
  */
 bool Loop_Name_Set(uint32_t object_instance, const char *new_name)
 {
@@ -325,8 +333,30 @@ bool Loop_Name_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        status = true;
-        pObject->Object_Name = new_name;
+        status = bacnet_character_cstring_set(&pObject->Object_Name, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the object-name
+ *  by duplicating (copying) an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if object-name was set. The object-name is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Loop_Name_Duplicate(uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Object_Name, new_name, SIZE_MAX);
     }
 
     return status;
@@ -344,7 +374,7 @@ const char *Loop_Name_ASCII(uint32_t object_instance)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        name = pObject->Object_Name;
+        name = bacnet_character_cstring_value_const(&pObject->Object_Name);
     }
 
     return name;
@@ -364,22 +394,20 @@ bool Loop_Description(
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Description) {
-            status =
-                characterstring_init_ansi(description, pObject->Description);
-        } else {
-            status = characterstring_init_ansi(description, "");
-        }
+        status = bacnet_character_cstring_to_characterstring_default(
+            description, &pObject->Description, "");
     }
 
     return status;
 }
 
 /**
- * @brief For a given object instance-number, sets the description
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- * @return  true if string was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if description was set
  */
 bool Loop_Description_Set(uint32_t object_instance, const char *new_name)
 {
@@ -388,8 +416,29 @@ bool Loop_Description_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        status = true;
-        pObject->Description = new_name;
+        status = bacnet_character_cstring_set(&pObject->Description, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ *  by duplicating (copying) an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if description was set. The description is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Loop_Description_Duplicate(uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Description, new_name, SIZE_MAX);
     }
 
     return status;
@@ -407,14 +456,83 @@ const char *Loop_Description_ANSI(uint32_t object_instance)
 
     pObject = Object_Data(object_instance);
     if (pObject) {
-        if (pObject->Description == NULL) {
-            name = "";
-        } else {
-            name = pObject->Description;
-        }
+        name =
+            bacnet_character_cstring_value_default(&pObject->Description, "");
     }
 
     return name;
+}
+
+/**
+ * For a given object instance-number, sets the object-name
+ *
+ * @param  wp_data - WriteProperty data containing the object instance
+ *  and target value.
+ * @param  cstring - holds the object-name to be set
+ *
+ * @return true if object-name was set
+ */
+static bool Loop_Object_Name_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Object_Name, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, sets the description property value
+ *
+ * @param  wp_data - WriteProperty data containing the object instance
+ *  and target value.
+ * @param  cstring - holds the description to be set
+ *
+ * @return true if description was set
+ */
+static bool Loop_Description_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Object_Data(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Description, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
 }
 
 /**
@@ -1620,6 +1738,10 @@ bool Loop_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_known_array_property(
         wp_data->application_data, wp_data->application_data_len, &value,
@@ -1631,6 +1753,22 @@ bool Loop_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     switch (wp_data->object_property) {
+        case PROP_OBJECT_NAME:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Loop_Object_Name_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Loop_Description_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_REAL);
@@ -1986,7 +2124,6 @@ static bool Loop_Read_Variable_Reference_Update(
     const BACNET_OBJECT_PROPERTY_REFERENCE *reference, float *value)
 {
     BACNET_READ_PROPERTY_DATA data = { 0 };
-    uint8_t apdu[32] = { 0 };
     int apdu_len = 0, len = 0;
     bool status = false;
 
@@ -1995,8 +2132,8 @@ static bool Loop_Read_Variable_Reference_Update(
         data.object_instance = reference->object_identifier.instance;
         data.object_property = reference->property_identifier;
         data.array_index = reference->property_array_index;
-        data.application_data = apdu;
-        data.application_data_len = sizeof(apdu);
+        data.application_data = Read_Property_Buffer;
+        data.application_data_len = sizeof(Read_Property_Buffer);
         data.error_class = ERROR_CLASS_PROPERTY;
         data.error_code = ERROR_CODE_UNKNOWN_PROPERTY;
         if (Read_Property_Internal_Callback) {
@@ -2004,7 +2141,8 @@ static bool Loop_Read_Variable_Reference_Update(
         }
         if (apdu_len > 0) {
             /* expecting only application tagged REAL values */
-            len = bacnet_real_application_decode(apdu, apdu_len, value);
+            len = bacnet_real_application_decode(
+                Read_Property_Buffer, apdu_len, value);
             if (len > 0) {
                 status = true;
             }
@@ -2285,8 +2423,6 @@ uint32_t Loop_Create(uint32_t object_instance)
         PROP_SETPOINT, BACNET_ARRAY_ALL);
     pObject->Priority_For_Writing = BACNET_MAX_PRIORITY;
     pObject->COV_Increment = 1.0f;
-    pObject->Description = NULL;
-    pObject->Object_Name = NULL;
     pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
     pObject->Out_Of_Service = false;
     pObject->Changed = false;
@@ -2307,6 +2443,8 @@ bool Loop_Delete(uint32_t object_instance)
         Keylist_Data_Delete(Object_List, object_instance);
 
     if (pObject) {
+        bacnet_character_cstring_free(&pObject->Description);
+        bacnet_character_cstring_free(&pObject->Object_Name);
         free(pObject);
         status = true;
     }
@@ -2333,6 +2471,8 @@ void Loop_Cleanup(void)
             do {
                 pObject = Keylist_Data_Pop(Object_List);
                 if (pObject) {
+                    bacnet_character_cstring_free(&pObject->Description);
+                    bacnet_character_cstring_free(&pObject->Object_Name);
                     free(pObject);
                 }
             } while (pObject);

@@ -10,6 +10,7 @@
 #include "bacnet/indtext.h"
 #include "bacnet/bacenum.h"
 #include "bacnet/bacstr.h"
+#include "bacnet/basic/sys/debug.h"
 #include "bacnet/bactext.h"
 
 static const char *ASHRAE_Reserved_String = "Reserved for Use by ASHRAE";
@@ -25,6 +26,32 @@ static bool bactext_string_to_uint32_index(
     }
 
     return bacnet_string_to_uint32(search_name, found_index);
+}
+
+INDTEXT_DATA bacnet_debug_severity_names[] = {
+    { DEBUG_LOG_EMERGENCY, "Emergency" },
+    { DEBUG_LOG_ALERT, "Alert" },
+    { DEBUG_LOG_CRITICAL, "Critical" },
+    { DEBUG_LOG_ERROR, "Error" },
+    { DEBUG_LOG_WARNING, "Warning" },
+    { DEBUG_LOG_NOTICE, "Notice" },
+    { DEBUG_LOG_INFO, "Info" },
+    { DEBUG_LOG_DEBUG, "Debug" },
+    { 0, NULL }
+};
+
+const char *
+bactext_debug_severity_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_debug_severity_names, index, default_string);
+}
+
+bool bactext_debug_severity_strtol(
+    const char *search_name, uint32_t *found_index)
+{
+    return bactext_string_to_uint32_index(
+        bacnet_debug_severity_names, search_name, found_index);
 }
 
 INDTEXT_DATA bacnet_confirmed_service_names[] = {
@@ -132,22 +159,22 @@ bool bactext_unconfirmed_service_strtol(
 INDTEXT_DATA bacnet_application_tag_names[] = {
     { BACNET_APPLICATION_TAG_NULL, "Null" },
     { BACNET_APPLICATION_TAG_BOOLEAN, "Boolean" },
-    { BACNET_APPLICATION_TAG_UNSIGNED_INT, "Unsigned Int" },
-    { BACNET_APPLICATION_TAG_SIGNED_INT, "Signed Int" },
+    { BACNET_APPLICATION_TAG_UNSIGNED_INT, "Unsigned-Int" },
+    { BACNET_APPLICATION_TAG_SIGNED_INT, "Signed-Int" },
     { BACNET_APPLICATION_TAG_REAL, "Real" },
     { BACNET_APPLICATION_TAG_DOUBLE, "Double" },
-    { BACNET_APPLICATION_TAG_OCTET_STRING, "Octet String" },
-    { BACNET_APPLICATION_TAG_CHARACTER_STRING, "Character String" },
-    { BACNET_APPLICATION_TAG_BIT_STRING, "Bit String" },
+    { BACNET_APPLICATION_TAG_OCTET_STRING, "Octet-String" },
+    { BACNET_APPLICATION_TAG_CHARACTER_STRING, "Character-String" },
+    { BACNET_APPLICATION_TAG_BIT_STRING, "Bit-String" },
     { BACNET_APPLICATION_TAG_ENUMERATED, "Enumerated" },
     { BACNET_APPLICATION_TAG_DATE, "Date" },
     { BACNET_APPLICATION_TAG_TIME, "Time" },
-    { BACNET_APPLICATION_TAG_OBJECT_ID, "Object ID" },
-    { BACNET_APPLICATION_TAG_RESERVE1, "Reserved 1" },
-    { BACNET_APPLICATION_TAG_RESERVE2, "Reserved 2" },
-    { BACNET_APPLICATION_TAG_RESERVE3, "Reserved 3" },
+    { BACNET_APPLICATION_TAG_OBJECT_ID, "Object-ID" },
+    { BACNET_APPLICATION_TAG_RESERVE1, "Reserved-1" },
+    { BACNET_APPLICATION_TAG_RESERVE2, "Reserved-2" },
+    { BACNET_APPLICATION_TAG_RESERVE3, "Reserved-3" },
     /* complex data types */
-    { BACNET_APPLICATION_TAG_EMPTYLIST, "Empty List" },
+    { BACNET_APPLICATION_TAG_EMPTYLIST, "Empty-List" },
     { BACNET_APPLICATION_TAG_WEEKNDAY, "BACnetWeeknday" },
     { BACNET_APPLICATION_TAG_DATERANGE, "BACnetDateRange" },
     { BACNET_APPLICATION_TAG_DATETIME, "BACnetDateTime" },
@@ -218,6 +245,13 @@ bool bactext_application_tag_index(
         bacnet_application_tag_names, search_name, found_index);
 }
 
+bool bactext_application_tag_strtol(
+    const char *search_name, uint32_t *found_index)
+{
+    return bactext_string_to_uint32_index(
+        bacnet_application_tag_names, search_name, found_index);
+}
+
 INDTEXT_DATA bacnet_reinitialized_state_names[] = {
     { BACNET_REINIT_COLDSTART, "coldstart" },
     { BACNET_REINIT_WARMSTART, "warmstart" },
@@ -246,12 +280,12 @@ bool bactext_reinitialized_state_strtol(
 }
 
 INDTEXT_DATA bacnet_character_string_encoding_names[] = {
-    { CHARACTER_ANSI_X34, "ANSI X3.4" },
+    { CHARACTER_UTF8, "ISO 10646 (UTF-8)" },
     { CHARACTER_MS_DBCS, "IBM/Microsoft DBCS" },
-    { CHARACTER_JISC_6226, "JIS C 6226" },
+    { CHARACTER_JIS, "JIS X 0208" },
     { CHARACTER_UCS4, "ISO 10646 (UCS-4)" },
     { CHARACTER_UCS2, "ISO 10646 (UCS-2)" },
-    { CHARACTER_ISO8859, "ISO 8859" },
+    { CHARACTER_ISO8859, "ISO 8859-1" },
     { 0, NULL }
 };
 
@@ -992,6 +1026,7 @@ INDTEXT_DATA bacnet_property_names[] = {
     { PROP_DEFAULT_COLOR, "default-color" },
     { PROP_DEFAULT_COLOR_TEMPERATURE, "default-color-temperature" },
     { PROP_OVERRIDE_COLOR_REFERENCE, "override-color-reference" },
+    { PROP_WRITE_EVERY_SCHEDULED_ACTION, "write-every-scheduled-action" },
     { PROP_COLOR_COMMAND, "color-command" },
     { PROP_HIGH_END_TRIM, "high-end-trim" },
     { PROP_LOW_END_TRIM, "low-end-trim" },

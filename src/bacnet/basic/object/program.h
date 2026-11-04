@@ -44,6 +44,8 @@ bool Program_Object_Name(
 BACNET_STACK_EXPORT
 bool Program_Name_Set(uint32_t object_instance, const char *new_name);
 BACNET_STACK_EXPORT
+bool Program_Name_Duplicate(uint32_t object_instance, const char *new_name);
+BACNET_STACK_EXPORT
 const char *Program_Name_ASCII(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
@@ -73,6 +75,8 @@ bool Program_Description(
     uint32_t object_instance, BACNET_CHARACTER_STRING *description);
 BACNET_STACK_EXPORT
 bool Program_Description_Set(uint32_t instance, const char *new_name);
+BACNET_STACK_EXPORT
+bool Program_Description_Duplicate(uint32_t instance, const char *new_name);
 BACNET_STACK_EXPORT
 const char *Program_Description_ANSI(uint32_t object_instance);
 
@@ -104,6 +108,12 @@ BACNET_STACK_EXPORT
 bool Program_Out_Of_Service(uint32_t instance);
 BACNET_STACK_EXPORT
 void Program_Out_Of_Service_Set(uint32_t instance, bool oos_flag);
+
+BACNET_STACK_EXPORT
+BACNET_RELIABILITY Program_Reliability(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Program_Reliability_Set(
+    uint32_t object_instance, BACNET_RELIABILITY value);
 
 BACNET_STACK_EXPORT
 void Program_Timer(uint32_t object_instance, uint16_t milliseconds);

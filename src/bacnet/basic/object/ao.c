@@ -18,6 +18,7 @@
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacerror.h"
 #include "bacnet/bacapp.h"
+#include "bacnet/bacstr.h"
 #include "bacnet/bactext.h"
 #include "bacnet/cov.h"
 #include "bacnet/apdu.h"
@@ -46,8 +47,8 @@ struct object_data {
     float Max_Pres_Value;
     BACNET_ENGINEERING_UNITS Units;
     uint8_t Reliability;
-    const char *Object_Name;
-    const char *Description;
+    BACNET_CHARACTER_CSTRING Object_Name;
+    BACNET_CHARACTER_CSTRING Description;
     void *Context;
 };
 /* Key List for storing the object data sorted by instance number  */
@@ -97,8 +98,9 @@ static const int32_t Properties_Proprietary[] = { -1 };
    that is always writable.  */
 static const int32_t Writable_Properties[] = {
     /* unordered list of writable properties */
-    PROP_PRESENT_VALUE,  PROP_OUT_OF_SERVICE, PROP_UNITS, PROP_COV_INCREMENT,
-    PROP_MIN_PRES_VALUE, PROP_MAX_PRES_VALUE, -1
+    PROP_PRESENT_VALUE, PROP_OUT_OF_SERVICE, PROP_UNITS,
+    PROP_COV_INCREMENT, PROP_MIN_PRES_VALUE, PROP_MAX_PRES_VALUE,
+    PROP_OBJECT_NAME,   PROP_DESCRIPTION,    -1
 };
 
 /**
@@ -203,7 +205,7 @@ unsigned Analog_Output_Instance_To_Index(uint32_t object_instance)
  */
 float Analog_Output_Present_Value(uint32_t object_instance)
 {
-    float value = 0.0;
+    float value = 0.0f;
     uint8_t priority = 0; /* loop counter */
     struct object_data *pObject;
 
@@ -284,7 +286,7 @@ static int Analog_Output_Priority_Array_Encode(
  */
 float Analog_Output_Relinquish_Default(uint32_t object_instance)
 {
-    float value = 0.0;
+    float value = 0.0f;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
@@ -296,28 +298,6 @@ float Analog_Output_Relinquish_Default(uint32_t object_instance)
 }
 
 /**
- * For a given object instance-number, sets the relinquish-default value
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - floating point analog output relinquish-default value
- *
- * @return  true if values are within range and relinquish-default value is set.
- */
-bool Analog_Output_Relinquish_Default_Set(uint32_t object_instance, float value)
-{
-    bool status = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        pObject->Relinquish_Default = value;
-        status = true;
-    }
-
-    return status;
-}
-
-/**
  * For a given object instance-number, checks the present-value for COV
  *
  * @param  pObject - specific object with valid data
@@ -326,9 +306,9 @@ bool Analog_Output_Relinquish_Default_Set(uint32_t object_instance, float value)
 static void
 Analog_Output_Present_Value_COV_Detect(struct object_data *pObject, float value)
 {
-    float prior_value = 0.0;
-    float cov_increment = 0.0;
-    float cov_delta = 0.0;
+    float prior_value = 0.0f;
+    float cov_increment = 0.0f;
+    float cov_delta = 0.0f;
 
     if (pObject) {
         prior_value = pObject->Prior_Value;
@@ -343,6 +323,49 @@ Analog_Output_Present_Value_COV_Detect(struct object_data *pObject, float value)
             pObject->Prior_Value = value;
         }
     }
+}
+
+/**
+ * @brief Flag a Status_Flags change of value, and save the Present_Value
+ *  at the time of the change for the COV notification. The saved value
+ *  is also the new COV_Increment baseline, because all COV subscribers
+ *  receive it.
+ * @param  object_instance - object-instance number of the object
+ * @param  pObject - specific object with valid data
+ */
+static void Analog_Output_Status_Flags_COV_Set(
+    uint32_t object_instance, struct object_data *pObject)
+{
+    if (pObject) {
+        pObject->Changed = true;
+        pObject->Prior_Value = Analog_Output_Present_Value(object_instance);
+    }
+}
+
+/**
+ * For a given object instance-number, sets the relinquish-default value
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - floating point analog output relinquish-default value
+ *
+ * @return  true if the relinquish-default value was set.
+ */
+bool Analog_Output_Relinquish_Default_Set(uint32_t object_instance, float value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Relinquish_Default = value;
+        /* a Relinquish_Default change can alter Present_Value when all
+           priorities are relinquished, so check for COV here too */
+        Analog_Output_Present_Value_COV_Detect(
+            pObject, Analog_Output_Present_Value(object_instance));
+        status = true;
+    }
+
+    return status;
 }
 
 /**
@@ -362,8 +385,9 @@ bool Analog_Output_Present_Value_Set(
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
-            (value >= pObject->Min_Pres_Value) &&
-            (value <= pObject->Max_Pres_Value)) {
+            (priority != 6 /* reserved */) &&
+            isgreaterequal(value, pObject->Min_Pres_Value) &&
+            islessequal(value, pObject->Max_Pres_Value)) {
             pObject->Relinquished[priority - 1] = false;
             pObject->Priority_Array[priority - 1] = value;
             Analog_Output_Present_Value_COV_Detect(
@@ -389,9 +413,10 @@ bool Analog_Output_Present_Value_Relinquish(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
+        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
+            (priority != 6 /* reserved */)) {
             pObject->Relinquished[priority - 1] = true;
-            pObject->Priority_Array[priority - 1] = 0.0;
+            pObject->Priority_Array[priority - 1] = 0.0f;
             Analog_Output_Present_Value_COV_Detect(
                 pObject, Analog_Output_Present_Value(object_instance));
             status = true;
@@ -414,7 +439,7 @@ bool Analog_Output_Priority_Array_Relinquished(
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
-    if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
+    if (pObject && (priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
         if (pObject->Relinquished[priority - 1]) {
             status = true;
         }
@@ -436,7 +461,7 @@ float Analog_Output_Priority_Array_Value(
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
-    if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
+    if (pObject && (priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
         real_value = pObject->Priority_Array[priority - 1];
     }
 
@@ -462,14 +487,14 @@ static bool Analog_Output_Present_Value_Write(
 {
     bool status = false;
     struct object_data *pObject;
-    float old_value = 0.0;
-    float new_value = 0.0;
+    float old_value = 0.0f;
+    float new_value = 0.0f;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
-            (value >= pObject->Min_Pres_Value) &&
-            (value <= pObject->Max_Pres_Value)) {
+            isgreaterequal(value, pObject->Min_Pres_Value) &&
+            islessequal(value, pObject->Max_Pres_Value)) {
             if (priority != 6) {
                 old_value = Analog_Output_Present_Value(object_instance);
                 Analog_Output_Present_Value_Set(
@@ -519,8 +544,8 @@ static bool Analog_Output_Present_Value_Relinquish_Write(
 {
     bool status = false;
     struct object_data *pObject;
-    float old_value = 0.0;
-    float new_value = 0.0;
+    float old_value = 0.0f;
+    float new_value = 0.0f;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -572,18 +597,19 @@ bool Analog_Output_Object_Name(
 {
     bool status = false;
     struct object_data *pObject;
-    char name_text[32];
+    int len = 0;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (pObject->Object_Name) {
-            status =
-                characterstring_init_ansi(object_name, pObject->Object_Name);
-        } else {
-            snprintf(
-                name_text, sizeof(name_text), "ANALOG OUTPUT %lu",
+        status = bacnet_character_cstring_to_characterstring(
+            object_name, &pObject->Object_Name);
+        if (!status) {
+            len = characterstring_utf8_snprintf(
+                object_name, "ANALOG-OUTPUT-%lu",
                 (unsigned long)object_instance);
-            status = characterstring_init_ansi(object_name, name_text);
+            if (len > 0) {
+                status = true;
+            }
         }
     }
 
@@ -591,12 +617,12 @@ bool Analog_Output_Object_Name(
 }
 
 /**
- * For a given object instance-number, sets the object-name
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- *
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if object-name was set
  */
 bool Analog_Output_Name_Set(uint32_t object_instance, const char *new_name)
 {
@@ -605,8 +631,31 @@ bool Analog_Output_Name_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        status = true;
-        pObject->Object_Name = new_name;
+        status = bacnet_character_cstring_set(&pObject->Object_Name, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the object-name
+ *  by duplicating (copying) an ANSI C string.
+ * @note The object name must be unique within this device.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if object-name was set. The object-name is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Analog_Output_Name_Duplicate(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Object_Name, new_name, SIZE_MAX);
     }
 
     return status;
@@ -624,7 +673,7 @@ const char *Analog_Output_Name_ASCII(uint32_t object_instance)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        name = pObject->Object_Name;
+        name = bacnet_character_cstring_value_const(&pObject->Object_Name);
     }
 
     return name;
@@ -709,7 +758,7 @@ void Analog_Output_Out_Of_Service_Set(uint32_t object_instance, bool value)
     if (pObject) {
         if (pObject->Out_Of_Service != value) {
             pObject->Out_Of_Service = value;
-            pObject->Changed = true;
+            Analog_Output_Status_Flags_COV_Set(object_instance, pObject);
         }
     }
 }
@@ -747,7 +796,7 @@ void Analog_Output_Overridden_Set(uint32_t object_instance, bool value)
     if (pObject) {
         if (pObject->Overridden != value) {
             pObject->Overridden = value;
-            pObject->Changed = true;
+            Analog_Output_Status_Flags_COV_Set(object_instance, pObject);
         }
     }
 }
@@ -807,7 +856,7 @@ bool Analog_Output_Reliability_Set(
             fault = Analog_Output_Object_Fault(pObject);
             pObject->Reliability = value;
             if (fault != Analog_Output_Object_Fault(pObject)) {
-                pObject->Changed = true;
+                Analog_Output_Status_Flags_COV_Set(object_instance, pObject);
             }
             status = true;
         }
@@ -842,17 +891,20 @@ const char *Analog_Output_Description(uint32_t object_instance)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        name = pObject->Description;
+        name =
+            bacnet_character_cstring_value_default(&pObject->Description, "");
     }
 
     return name;
 }
 
 /**
- * @brief For a given object instance-number, sets the description
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if description was set
  */
 bool Analog_Output_Description_Set(
     uint32_t object_instance, const char *new_name)
@@ -862,8 +914,100 @@ bool Analog_Output_Description_Set(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        status = true;
-        pObject->Description = new_name;
+        status = bacnet_character_cstring_set(&pObject->Description, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ *  by duplicating (copying) an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name ANSI C string to copy, or NULL to clear it.
+ * @return true if description was set. The description is unchanged on
+ *  failure (object not found, string too long, or out of memory).
+ */
+bool Analog_Output_Description_Duplicate(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        status = bacnet_character_cstring_strndup(
+            &pObject->Description, new_name, SIZE_MAX);
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, sets the object-name
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  cstring - holds the object-name to be set
+ *
+ * @return true if object-name was set
+ */
+static bool Analog_Output_Object_Name_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Object_Name, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, sets the description property value
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  cstring - holds the description to be set
+ *
+ * @return true if description was set
+ */
+static bool Analog_Output_Description_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Description, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
     }
 
     return status;
@@ -876,7 +1020,7 @@ bool Analog_Output_Description_Set(
  */
 float Analog_Output_Min_Pres_Value(uint32_t object_instance)
 {
-    float value = 0.0;
+    float value = 0.0f;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
@@ -914,7 +1058,7 @@ bool Analog_Output_Min_Pres_Value_Set(uint32_t object_instance, float value)
  */
 float Analog_Output_Max_Pres_Value(uint32_t object_instance)
 {
-    float value = 0.0;
+    float value = 0.0f;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
@@ -980,6 +1124,11 @@ void Analog_Output_Change_Of_Value_Clear(uint32_t object_instance)
 
 /**
  * @brief Encode the Value List for Present-Value and Status-Flags
+ * @note The encoded Present_Value is the value at the time of the last
+ *  change of value (Prior_Value), so that all COV subscribers receive the
+ *  same value. The initial notification after a SubscribeCOV can report a
+ *  Present_Value that differs from the current Present_Value by less than
+ *  the COV_Increment.
  * @param object_instance - object-instance number of the object
  * @param  value_list - #BACNET_PROPERTY_VALUE with at least 2 entries
  * @return true if values were encoded
@@ -991,7 +1140,6 @@ bool Analog_Output_Encode_Value_List(
     struct object_data *pObject;
     const bool in_alarm = false;
     bool fault = false;
-    const bool overridden = false;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -999,8 +1147,8 @@ bool Analog_Output_Encode_Value_List(
             fault = true;
         }
         status = cov_value_list_encode_real(
-            value_list, pObject->Prior_Value, in_alarm, fault, overridden,
-            pObject->Out_Of_Service);
+            value_list, pObject->Prior_Value, in_alarm, fault,
+            pObject->Overridden, pObject->Out_Of_Service);
     }
 
     return status;
@@ -1013,7 +1161,7 @@ bool Analog_Output_Encode_Value_List(
  */
 float Analog_Output_COV_Increment(uint32_t object_instance)
 {
-    float value = 0.0;
+    float value = 0.0f;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
@@ -1056,7 +1204,7 @@ int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_CHARACTER_STRING char_string;
     uint8_t *apdu = NULL;
     uint32_t units = 0;
-    float real_value = 0.0;
+    float real_value = 0.0f;
     unsigned i = 0;
     bool state = false;
 
@@ -1185,6 +1333,10 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);
@@ -1196,6 +1348,22 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     switch (wp_data->object_property) {
+        case PROP_OBJECT_NAME:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Analog_Output_Object_Name_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Analog_Output_Description_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_REAL);
@@ -1352,21 +1520,20 @@ uint32_t Analog_Output_Create(uint32_t object_instance)
     if (!pObject) {
         pObject = calloc(1, sizeof(struct object_data));
         if (pObject) {
-            pObject->Object_Name = NULL;
             pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
             pObject->Overridden = false;
             for (priority = 0; priority < BACNET_MAX_PRIORITY; priority++) {
                 pObject->Relinquished[priority] = true;
-                pObject->Priority_Array[priority] = 0.0;
+                pObject->Priority_Array[priority] = 0.0f;
             }
-            pObject->Relinquish_Default = 0.0;
-            pObject->COV_Increment = 1.0;
-            pObject->Prior_Value = 0.0;
+            pObject->Relinquish_Default = 0.0f;
+            pObject->COV_Increment = 1.0f;
+            pObject->Prior_Value = 0.0f;
             pObject->Units = UNITS_NO_UNITS;
             pObject->Out_Of_Service = false;
             pObject->Changed = false;
-            pObject->Min_Pres_Value = 0;
-            pObject->Max_Pres_Value = 100;
+            pObject->Min_Pres_Value = -FLT_MAX;
+            pObject->Max_Pres_Value = FLT_MAX;
             /* add to list */
             index = Keylist_Data_Add(Object_List, object_instance, pObject);
             if (index < 0) {
@@ -1393,6 +1560,8 @@ bool Analog_Output_Delete(uint32_t object_instance)
 
     pObject = Keylist_Data_Delete(Object_List, object_instance);
     if (pObject) {
+        bacnet_character_cstring_free(&pObject->Object_Name);
+        bacnet_character_cstring_free(&pObject->Description);
         free(pObject);
         status = true;
     }
@@ -1419,6 +1588,8 @@ void Analog_Output_Cleanup(void)
             do {
                 pObject = Keylist_Data_Pop(Object_List);
                 if (pObject) {
+                    bacnet_character_cstring_free(&pObject->Object_Name);
+                    bacnet_character_cstring_free(&pObject->Description);
                     free(pObject);
                 }
             } while (pObject);

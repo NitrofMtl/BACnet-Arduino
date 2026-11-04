@@ -326,6 +326,9 @@ int bacnet_log_record_datum32_decode(
             break;
         case BACNET_LOG_DATUM_NULL:
             /* null-value [7] NULL - nothing to do, value is tag */
+            if (len_value_type != 0) {
+                return BACNET_STATUS_ERROR;
+            }
             break;
         case BACNET_LOG_DATUM_FAILURE:
             /* open/close tagged values are not processed here */
@@ -361,7 +364,7 @@ int bacnet_log_record_datum32_decode(
  * @return  number of bytes decoded (0 or more) or
  *  BACNET_STATUS_ERROR on error
  */
-int bacnet_log_record_datum_failure_decode(
+static int bacnet_log_record_datum_failure_decode(
     const uint8_t *apdu, size_t apdu_size, BACNET_LOG_RECORD *value)
 {
     int len = 0;

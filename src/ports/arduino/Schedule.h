@@ -163,7 +163,7 @@ public:
     * @note Only one time-value entry per day is supported in this implementation.
     *       Call this once per day you want to configure.
     */
-    template<typename T>
+    /*template<typename T>
     void setSchedule(uint8_t dayOfWeek, uint8_t index, uint8_t hour, uint8_t min, T value)
     {
         SCHEDULE_DESCR *desc = Schedule_Object(instance);
@@ -217,7 +217,7 @@ public:
         scheduleNextEvent();
         arm();
         save();
-    }
+    }*/
 
     /**
      * @brief Set the BACnet object referenced by this schedule.
@@ -347,7 +347,7 @@ private:
         const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *ref,
         uint32_t value,
         uint8_t priority);
-    void applyPresentValue(SCHEDULE_DESCR *desc);
+    //void applyPresentValue(SCHEDULE_DESCR *desc);
     bool Schedule_Value_Changed(
         const BACNET_APPLICATION_DATA_VALUE &oldValue,
         const BACNET_APPLICATION_DATA_VALUE &newValue);
@@ -363,8 +363,8 @@ private:
     void scheduleNextEvent();
     void restore();
     void save();
-    static bool Schedule_Recalculate_PV(
-    SCHEDULE_DESCR *desc, BACNET_WEEKDAY wday, const BACNET_TIME *time);
+    //static bool Schedule_Recalculate_PV(
+    //SCHEDULE_DESCR *desc, BACNET_WEEKDAY wday, const BACNET_TIME *time);
 };
 
 

@@ -299,6 +299,10 @@ BACNET_STACK_EXPORT
 int bacapp_encode_data(
     uint8_t *apdu, const BACNET_APPLICATION_DATA_VALUE *value);
 BACNET_STACK_EXPORT
+int bacapp_encode_data_list(
+    uint8_t *apdu, const BACNET_APPLICATION_DATA_VALUE *object_value);
+
+BACNET_STACK_EXPORT
 int bacapp_encode_known_property(
     uint8_t *apdu,
     BACNET_APPLICATION_DATA_VALUE *value,
@@ -437,9 +441,13 @@ bool bacapp_channel_value_copy(
     BACNET_CHANNEL_VALUE *cvalue, const BACNET_APPLICATION_DATA_VALUE *value);
 
 BACNET_STACK_EXPORT
+bool bacapp_parse_primitive_value(
+    const char *argv, BACNET_PRIMITIVE_DATA_VALUE *prim);
+
+BACNET_STACK_EXPORT
 bool bacapp_parse_application_data(
     BACNET_APPLICATION_TAG tag_number,
-    char *argv,
+    const char *argv,
     BACNET_APPLICATION_DATA_VALUE *value);
 
 BACNET_STACK_EXPORT
